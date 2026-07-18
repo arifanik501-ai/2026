@@ -39,7 +39,7 @@ function init() {
     setDefaultDueDate();
     
     // Attach event listeners for real-time filtering
-    ['searchInput', 'filterStatus', 'filterPriority', 'sortOptions'].forEach(id => {
+    ['searchInput', 'filterPriority', 'sortOptions'].forEach(id => {
         document.getElementById(id).addEventListener('input', renderTasks);
     });
     
@@ -186,23 +186,15 @@ function getFilteredAndSortedTasks() {
     }
 
     const search = document.getElementById('searchInput').value.toLowerCase();
-    const status = document.getElementById('filterStatus').value;
-    const priority = document.getElementById('filterPriority').value;
+    const fPriority = document.getElementById('filterPriority').value;
     const sort = document.getElementById('sortOptions').value;
-
-    if (search) {
-        list = list.filter(t => 
-            t.text.toLowerCase().includes(search) || 
-            (t.notes && t.notes.toLowerCase().includes(search)) ||
-            (t.category && t.category.toLowerCase().includes(search))
-        );
-    }
-    if (status !== 'All') {
-        list = list.filter(t => t.completed === (status === 'Completed'));
-    }
-    if (priority !== 'All') {
-        list = list.filter(t => t.priority === priority);
-    }
+    
+    list = list.filter(t => {
+        const matchesSearch = t.text.toLowerCase().includes(search) || (t.notes && t.notes.toLowerCase().includes(search));
+        const matchesPriority = fPriority === 'All' || t.priority === fPriority;
+        
+        return matchesSearch && matchesPriority;
+    });
 
     list.sort((a, b) => {
         if (sort === 'default') {
