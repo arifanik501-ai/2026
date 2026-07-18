@@ -26,14 +26,14 @@
 
 * {
     box-sizing: border-box;
-    font-family: 'Times New Roman', serif;
+    font-family: 'Inter', sans-serif;
     margin: 0;
     padding: 0;
     transition: none !important;
 }
 
 h1, h2, h3, h4, h5, h6 {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 body {
@@ -88,15 +88,23 @@ button, input, select, textarea {
     background-color: var(--btn-bg);
     color: var(--text-color);
     border: 1px solid var(--border-color);
-    padding: 8px 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 input[type="text"], input[type="datetime-local"], select, textarea {
     cursor: text;
 }
 button:hover {
     background-color: var(--btn-hover);
+    
+    box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+}
+button:active {
+    
+    box-shadow: none;
 }
 textarea {
     resize: vertical;
@@ -110,8 +118,10 @@ textarea {
     flex-wrap: wrap;
     align-items: center;
     background: var(--task-bg);
-    padding: 15px;
-    border: 1px solid var(--border-color);
+    padding: 20px;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 .task-form > input[type="text"]#taskText {
     flex: 1;
@@ -160,9 +170,11 @@ textarea {
 
 .task-item {
     background-color: var(--task-bg);
-    border: 1px solid var(--border-color);
-    margin-bottom: 10px;
-    padding: 15px;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    margin-bottom: 12px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -244,8 +256,10 @@ textarea {
 }
 .modal-content {
     background: var(--bg-color);
-    padding: 25px;
-    border: 1px solid var(--border-color);
+    padding: 30px;
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     width: 90%;
     max-width: 500px;
     display: flex;
@@ -286,11 +300,30 @@ textarea {
     display: none;
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.0); /* Start transparent for animation */
     z-index: 900;
+    transition: none !important;
 }
 .sidebar-overlay.show {
     display: block;
+    background: rgba(0,0,0,0.6); /* Fade in */
+}
+
+/* Mobile Menu Button Style */
+#mobileMenuBtn {
+    font-size: 1.5rem;
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#mobileMenuBtn:hover {
+    background: var(--btn-bg);
 }
 
 /* Strict Mobile Overrides */
@@ -304,17 +337,17 @@ textarea {
     }
     
     .sidebar {
-        position: absolute;
+        position: fixed;
         top: 0;
         left: -320px; /* Off-canvas */
         width: 280px;
-        height: 100%;
+        height: 100vh;
         z-index: 1000;
         background-color: var(--bg-color);
-        transition: left 0.3s ease-in-out !important; /* Allow sliding animation */
+        transition: none !important; /* Super smooth slide */
         border-right: 1px solid var(--border-color);
         border-bottom: none;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+        box-shadow: 4px 0 15px rgba(0,0,0,0.2);
     }
     
     .sidebar.open {
@@ -327,13 +360,13 @@ textarea {
     }
 
     .header-actions {
-        flex-wrap: wrap;
+        display: none !important;
     }
     
     /* Compact Task Form */
     .task-form {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 10px;
         padding: 12px;
     }
@@ -342,17 +375,29 @@ textarea {
         grid-column: 1 / -1;
     }
     
-    .task-form > div {
+    .due-date-wrapper {
         display: flex;
         flex-direction: column !important;
         align-items: flex-start !important;
         gap: 3px !important;
     }
     
-    .task-form input, 
+    .reminder-wrapper {
+        display: flex;
+        flex-direction: row !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 5px !important;
+    }
+    
+    .task-form input:not([type="number"]), 
     .task-form textarea, 
     .task-form select {
         width: 100% !important;
+    }
+    
+    .reminder-wrapper input[type="number"] {
+        width: 70px !important;
     }
     
     /* Better Task Items */

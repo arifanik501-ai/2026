@@ -59,7 +59,9 @@ function checkReminders() {
     });
     
     if (needsSave) {
-        saveData();
+        state.tasks.forEach(task => {
+            if (task.reminderNotified) syncTask(task);
+        });
     }
 }
 
@@ -85,8 +87,21 @@ function loadData() {
     dbRef.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
-            state.tasks = data.tasks || [];
-            state.lists = data.lists || ['Default'];
+            if (Array.isArray(data.tasks)) {
+                state.tasks = data.tasks.filter(t => t !== null);
+            } else if (typeof data.tasks === 'object' && data.tasks !== null) {
+                state.tasks = Object.values(data.tasks).filter(t => t !== null);
+            } else {
+                state.tasks = [];
+            }
+            
+            if (Array.isArray(data.lists)) {
+                state.lists = data.lists.filter(l => l !== null);
+            } else if (typeof data.lists === 'object' && data.lists !== null) {
+                state.lists = Object.values(data.lists).filter(l => l !== null);
+            } else {
+                state.lists = ['Default'];
+            }
             state.theme = data.theme || 'light';
         }
         // Force UI updates when cloud data arrives
@@ -97,13 +112,26 @@ function loadData() {
     });
 }
 
-function saveData() {
-    // Push updates to Firebase instantly using compat API
-    dbRef.set({
-        tasks: state.tasks || [],
-        lists: state.lists || ['Default'],
-        theme: state.theme || 'light'
-    });
+function syncTask(task) {
+    dbRef.child('tasks').child(task.id).set(task);
+}
+
+function syncDeleteTask(taskId) {
+    dbRef.child('tasks').child(taskId).remove();
+}
+
+function syncAllTasks() {
+    let updates = {};
+    state.tasks.forEach(t => { updates[t.id] = t; });
+    dbRef.child('tasks').set(updates);
+}
+
+function syncLists() {
+    dbRef.child('lists').set(state.lists);
+}
+
+function syncTheme() {
+    dbRef.child('theme').set(state.theme);
 }
 
 function generateId() {
@@ -302,7 +330,8 @@ function addTask() {
     const priorityEl = document.getElementById('taskPriority');
     const categoryEl = document.getElementById('taskCategory');
     const dueDateEl = document.getElementById('taskDueDate');
-    const reminderEl = document.getElementById('taskReminderDate');
+    const remDays = parseInt(document.getElementById('taskReminderDays').value) || 0;
+    const remHours = parseInt(document.getElementById('taskReminderHours').value) || 0;
     const recurringEl = document.getElementById('taskRecurring');
 
     const text = textEl.value.trim();
@@ -315,7 +344,7 @@ function addTask() {
         priority: priorityEl.value,
         category: categoryEl.value.trim(),
         dueDate: dueDateEl.value,
-        reminderDate: reminderEl.value,
+        reminderDate: (remDays > 0 || remHours > 0) ? new Date(Date.now() + ((remDays * 24 + remHours) * 3600000)).toISOString() : '',
         reminderNotified: false,
         recurring: recurringEl.value,
         completed: false,
@@ -328,10 +357,11 @@ function addTask() {
     state.tasks.push(newTask);
     textEl.value = '';
     detailsEl.value = '';
-    reminderEl.value = '';
+    document.getElementById('taskReminderDays').value = '';
+    document.getElementById('taskReminderHours').value = '';
     setDefaultDueDate();
     
-    saveData();
+    syncTask(newTask);
     renderTasks();
 }
 document.getElementById('addTaskBtn').addEventListener('click', addTask);
@@ -363,6 +393,7 @@ function handleRecurring(task) {
         });
         
         state.tasks.push(newTask);
+        syncTask(newTask);
     }
 }
 
@@ -371,7 +402,7 @@ document.getElementById('taskList').addEventListener('click', (e) => {
     if (e.target.classList.contains('delete-btn')) {
         const id = e.target.dataset.id;
         state.tasks = state.tasks.filter(t => t.id !== id);
-        saveData(); renderTasks();
+        syncDeleteTask(id); renderTasks();
     } else if (e.target.classList.contains('task-checkbox')) {
         const id = e.target.dataset.id;
         const task = state.tasks.find(t => t.id === id);
@@ -380,16 +411,16 @@ document.getElementById('taskList').addEventListener('click', (e) => {
             if (task.completed && task.recurring !== 'None') {
                 handleRecurring(task);
             }
-            saveData(); renderTasks();
+            syncTask(task); renderTasks();
         }
     } else if (e.target.classList.contains('edit-btn')) {
         openEditModal(e.target.dataset.id);
     } else if (e.target.classList.contains('archive-btn')) {
         const task = state.tasks.find(t => t.id === e.target.dataset.id);
-        if (task) { task.archived = true; saveData(); renderTasks(); }
+        if (task) { task.archived = true; syncTask(task); renderTasks(); }
     } else if (e.target.classList.contains('unarchive-btn')) {
         const task = state.tasks.find(t => t.id === e.target.dataset.id);
-        if (task) { task.archived = false; saveData(); renderTasks(); }
+        if (task) { task.archived = false; syncTask(task); renderTasks(); }
     } else if (e.target.classList.contains('subtask-checkbox')) {
         const taskId = e.target.dataset.taskid;
         const subtaskId = e.target.dataset.subtaskid;
@@ -398,7 +429,7 @@ document.getElementById('taskList').addEventListener('click', (e) => {
             const subtask = task.subtasks.find(st => st.id === subtaskId);
             if (subtask) {
                 subtask.completed = e.target.checked;
-                saveData(); renderTasks();
+                syncTask(task); renderTasks();
             }
         }
     }
@@ -416,7 +447,20 @@ function openEditModal(id) {
     document.getElementById('editTaskPriority').value = editingTaskDraft.priority;
     document.getElementById('editTaskCategory').value = editingTaskDraft.category || '';
     document.getElementById('editTaskDueDate').value = editingTaskDraft.dueDate || '';
-    document.getElementById('editTaskReminderDate').value = editingTaskDraft.reminderDate || '';
+    if (editingTaskDraft.reminderDate) {
+        const msDiff = new Date(editingTaskDraft.reminderDate) - new Date();
+        if (msDiff > 0) {
+            const totalHours = Math.floor(msDiff / 3600000);
+            document.getElementById('editTaskReminderDays').value = Math.floor(totalHours / 24);
+            document.getElementById('editTaskReminderHours').value = totalHours % 24;
+        } else {
+            document.getElementById('editTaskReminderDays').value = '';
+            document.getElementById('editTaskReminderHours').value = '';
+        }
+    } else {
+        document.getElementById('editTaskReminderDays').value = '';
+        document.getElementById('editTaskReminderHours').value = '';
+    }
     document.getElementById('editTaskRecurring').value = editingTaskDraft.recurring || 'None';
     
     renderEditSubtasks();
@@ -459,7 +503,9 @@ document.getElementById('saveEditBtn').addEventListener('click', () => {
             editingTaskDraft.category = document.getElementById('editTaskCategory').value.trim();
             editingTaskDraft.dueDate = document.getElementById('editTaskDueDate').value;
             
-            const newReminder = document.getElementById('editTaskReminderDate').value;
+            const eDays = parseInt(document.getElementById('editTaskReminderDays').value) || 0;
+            const eHours = parseInt(document.getElementById('editTaskReminderHours').value) || 0;
+            const newReminder = (eDays > 0 || eHours > 0) ? new Date(Date.now() + ((eDays * 24 + eHours) * 3600000)).toISOString() : '';
             if (editingTaskDraft.reminderDate !== newReminder) {
                 editingTaskDraft.reminderNotified = false; // Reset notification state if time changed
             }
@@ -468,7 +514,7 @@ document.getElementById('saveEditBtn').addEventListener('click', () => {
             editingTaskDraft.recurring = document.getElementById('editTaskRecurring').value;
             
             state.tasks[taskIdx] = editingTaskDraft;
-            saveData();
+            syncTask(editingTaskDraft);
             renderTasks();
             closeEditModal();
         }
@@ -486,14 +532,17 @@ document.getElementById('listsContainer').addEventListener('click', (e) => {
         const listName = e.target.dataset.name;
         if (confirm(`Delete list '${listName}' and all its tasks?`)) {
             state.lists = state.lists.filter(l => l !== listName);
+            const deletedTasks = state.tasks.filter(t => t.list === listName);
             state.tasks = state.tasks.filter(t => t.list !== listName);
             state.currentList = 'Default';
-            saveData(); renderLists(); renderTasks();
+            syncLists();
+            deletedTasks.forEach(t => syncDeleteTask(t.id));
+            renderLists(); renderTasks();
         }
     } else if (e.target.closest('.list-item')) {
         state.currentList = e.target.closest('.list-item').dataset.name;
         state.viewMode = 'active';
-        saveData(); renderLists(); renderTasks();
+        renderLists(); renderTasks();
     }
 });
 document.getElementById('addListBtn').addEventListener('click', () => {
@@ -503,7 +552,7 @@ document.getElementById('addListBtn').addEventListener('click', () => {
         state.lists.push(name);
         state.currentList = name;
         input.value = '';
-        saveData(); renderLists(); renderTasks();
+        syncLists(); renderLists(); renderTasks();
     }
 });
 
@@ -537,7 +586,7 @@ taskListEl.addEventListener('drop', (e) => {
                 
                 // Reassign orders sequentially for this list's tasks
                 visibleTasks.forEach((t, i) => t.order = i);
-                saveData(); renderTasks();
+                syncAllTasks(); renderTasks();
             }
         }
     }
@@ -546,29 +595,29 @@ taskListEl.addEventListener('drop', (e) => {
 
 // Additional Actions
 document.getElementById('viewActiveBtn').addEventListener('click', () => {
-    state.viewMode = 'active'; saveData(); renderTasks();
+    state.viewMode = 'active'; renderTasks();
 });
 document.getElementById('viewCompletedBtn').addEventListener('click', () => {
-    state.viewMode = 'completed'; saveData(); renderTasks();
+    state.viewMode = 'completed'; renderTasks();
 });
 document.getElementById('viewArchiveBtn').addEventListener('click', () => {
-    state.viewMode = 'archived'; saveData(); renderTasks();
+    state.viewMode = 'archived'; renderTasks();
 });
 
 document.getElementById('clearCompletedBtn').addEventListener('click', () => {
     if (confirm('Delete all completed tasks in the current view?')) {
-        state.tasks = state.tasks.filter(t => {
-            if (t.list !== state.currentList) return true;
-            if (t.archived !== (state.viewMode === 'archived')) return true;
-            return !t.completed;
-        });
-        saveData(); renderTasks();
+        const toDelete = state.tasks.filter(t => t.list === state.currentList && t.archived === (state.viewMode === 'archived') && t.completed);
+        state.tasks = state.tasks.filter(t => !toDelete.includes(t));
+        toDelete.forEach(t => syncDeleteTask(t.id));
+        renderTasks();
     }
 });
 document.getElementById('clearAllBtn').addEventListener('click', () => {
     if (confirm('Delete ALL tasks in this list?')) {
+        const toDelete = state.tasks.filter(t => t.list === state.currentList);
         state.tasks = state.tasks.filter(t => t.list !== state.currentList);
-        saveData(); renderTasks();
+        toDelete.forEach(t => syncDeleteTask(t.id));
+        renderTasks();
     }
 });
 
@@ -592,7 +641,7 @@ document.getElementById('importFile').addEventListener('change', (e) => {
             const data = JSON.parse(e.target.result);
             if (data && Array.isArray(data.tasks)) {
                 state = data;
-                saveData(); applyTheme(); renderLists(); renderTasks();
+                syncAllTasks(); syncLists(); syncTheme(); applyTheme(); renderLists(); renderTasks();
                 alert('Data imported successfully!');
             }
         } catch(err) {
@@ -604,14 +653,9 @@ document.getElementById('importFile').addEventListener('change', (e) => {
 });
 
 // Theme
-function applyTheme() {
-    document.body.setAttribute('data-theme', state.theme);
-}
-function toggleTheme() {
-    state.theme = state.theme === 'light' ? 'dark' : 'light';
-    applyTheme(); saveData();
-}
-document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+
+
 
 // Keyboard Shortcuts
 document.addEventListener('keydown', (e) => {
@@ -634,13 +678,11 @@ if ("Notification" in window && Notification.permission !== "denied" && Notifica
     Notification.requestPermission();
 }
 
-// Initialization
-init();
-
 // Mobile Sidebar Logic
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const sidebar = document.querySelector('.sidebar');
 const sidebarOverlay = document.getElementById('sidebarOverlay');
+const closeSidebarBtn = document.getElementById('closeSidebarBtn');
 
 function toggleSidebar(forceClose = false) {
     if (window.innerWidth > 768) return; // Only apply on mobile
@@ -655,6 +697,7 @@ function toggleSidebar(forceClose = false) {
 
 if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', () => toggleSidebar());
 if(sidebarOverlay) sidebarOverlay.addEventListener('click', () => toggleSidebar(true));
+if(closeSidebarBtn) closeSidebarBtn.addEventListener('click', () => toggleSidebar(true));
 
 // Auto-close sidebar on mobile when a view or list is clicked
 document.getElementById('listsContainer').addEventListener('click', (e) => {
@@ -667,3 +710,115 @@ document.getElementById('viewCompletedBtn').addEventListener('click', () => togg
 document.getElementById('viewArchiveBtn').addEventListener('click', () => toggleSidebar(true));
 document.getElementById('clearCompletedBtn').addEventListener('click', () => toggleSidebar(true));
 document.getElementById('clearAllBtn').addEventListener('click', () => toggleSidebar(true));
+
+
+// --- THEME LOGIC ---
+const lightThemes = [
+    { id: 'light-0', bg: '#f0fff4', btn: '#c6f6d5', hover: '#9ae6b4', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-1', bg: '#f3e8ff', btn: '#e9d8fd', hover: '#d6bcfa', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-2', bg: '#fff5f5', btn: '#fed7d7', hover: '#feb2b2', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-3', bg: '#fffff0', btn: '#fefcbf', hover: '#faf089', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-4', bg: '#ebf8ff', btn: '#bee3f8', hover: '#90cdf4', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-5', bg: '#fff0f6', btn: '#fed7e2', hover: '#fbb6ce', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-6', bg: '#f0fdf4', btn: '#bbf7d0', hover: '#86efac', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-7', bg: '#fef3c7', btn: '#fde68a', hover: '#fcd34d', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-8', bg: '#e0f2fe', btn: '#bae6fd', hover: '#7dd3fc', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-9', bg: '#faf5ff', btn: '#e9d5ff', hover: '#d8b4fe', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-10', bg: '#ffedd5', btn: '#fed7aa', hover: '#fdba74', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-11', bg: '#f0fdfa', btn: '#ccfbf1', hover: '#99f6e4', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-12', bg: '#f8fafc', btn: '#e2e8f0', hover: '#cbd5e1', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-13', bg: '#ffe4e6', btn: '#fecdd3', hover: '#fda4af', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-14', bg: '#f7fee7', btn: '#d9f99d', hover: '#bef264', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-15', bg: '#ecfeff', btn: '#cffafe', hover: '#a5f3fc', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-16', bg: '#eef2ff', btn: '#c7d2fe', hover: '#a5b4fc', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-17', bg: '#fdf4ff', btn: '#fbcfe8', hover: '#f9a8d4', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-18', bg: '#fafaf9', btn: '#e7e5e4', hover: '#d6d3d1', task: '#ffffff', border: '#cbd5e0' },
+    { id: 'light-19', bg: '#ecfdf5', btn: '#a7f3d0', hover: '#6ee7b7', task: '#ffffff', border: '#cbd5e0' }
+];
+
+const themeModal = document.getElementById('themeModal');
+const closeThemeModalBtn = document.getElementById('closeThemeModalBtn');
+const colorPalette = document.getElementById('colorPalette');
+const modalDarkModeToggle = document.getElementById('modalDarkModeToggle');
+
+if (document.getElementById('themeBtnHeader')) {
+    document.getElementById('themeBtnHeader').addEventListener('click', () => {
+        themeModal.classList.remove('hidden');
+        renderColorPalette();
+    });
+}
+if (document.getElementById('themeBtnSidebar')) {
+    document.getElementById('themeBtnSidebar').addEventListener('click', () => {
+        themeModal.classList.remove('hidden');
+        renderColorPalette();
+        toggleSidebar(true);
+    });
+}
+if (closeThemeModalBtn) {
+    closeThemeModalBtn.addEventListener('click', () => themeModal.classList.add('hidden'));
+}
+
+function renderColorPalette() {
+    colorPalette.innerHTML = '';
+    lightThemes.forEach((t, index) => {
+        const btn = document.createElement('div');
+        btn.style.width = '40px';
+        btn.style.height = '40px';
+        btn.style.borderRadius = '50%';
+        btn.style.backgroundColor = t.bg;
+        btn.style.border = '2px solid ' + t.border;
+        btn.style.cursor = 'pointer';
+        btn.style.transition = 'none';
+        
+        if (state.theme === t.id || (state.theme === 'light' && index === 7)) { // 7 is a nice greenish default fallback
+            btn.style.boxShadow = '0 0 0 3px var(--text-color)';
+        }
+        
+        // removed hover scale
+        // removed hover scale
+        btn.addEventListener('click', () => {
+            state.theme = t.id;
+            applyTheme();
+            syncTheme();
+            renderColorPalette();
+        });
+        colorPalette.appendChild(btn);
+    });
+}
+
+modalDarkModeToggle.addEventListener('click', () => {
+    state.theme = 'dark';
+    applyTheme();
+    syncTheme();
+    renderColorPalette();
+    themeModal.classList.add('hidden');
+});
+
+function applyTheme() {
+    if (state.theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.style.removeProperty('--bg-color');
+        document.documentElement.style.removeProperty('--btn-bg');
+        document.documentElement.style.removeProperty('--btn-hover');
+        document.documentElement.style.removeProperty('--task-bg');
+        document.documentElement.style.removeProperty('--border-color');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        
+        let selectedTheme = lightThemes.find(t => t.id === state.theme);
+        if (!selectedTheme) {
+            // Default to something greenish if state.theme is just 'light'
+            selectedTheme = lightThemes[7]; 
+        }
+        
+        document.documentElement.style.setProperty('--bg-color', selectedTheme.bg);
+        document.documentElement.style.setProperty('--btn-bg', selectedTheme.btn);
+        document.documentElement.style.setProperty('--btn-hover', selectedTheme.hover);
+        document.documentElement.style.setProperty('--task-bg', selectedTheme.task);
+        document.documentElement.style.setProperty('--border-color', selectedTheme.border);
+    }
+}
+// --- END THEME LOGIC ---
+
+// Initialization
+init();

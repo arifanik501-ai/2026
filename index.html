@@ -6,18 +6,18 @@
 <title>Ultimate Daily To-Do List</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <header>
     <div style="display: flex; align-items: center; gap: 10px;">
-        <button id="mobileMenuBtn" class="mobile-only" style="font-size: 1.2rem; padding: 4px 10px; background: transparent; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; cursor: pointer;">☰</button>
+        <button id="mobileMenuBtn" class="mobile-only">☰</button>
         <h1>To-Do List</h1>
     </div>
     <div class="header-actions">
-        <button id="themeToggle">Toggle Dark Mode</button>
+        <button id="themeBtnHeader">🎨 Themes</button>
         <button id="exportBtn">Export Data</button>
         <input type="file" id="importFile" accept=".json" class="hidden">
         <button id="importBtn">Import Data</button>
@@ -26,6 +26,10 @@
 
 <div class="container">
     <div class="sidebar">
+        <div class="mobile-only" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+            <h2>Menu</h2>
+            <button id="closeSidebarBtn" style="background:transparent; border:none; font-size:1.5rem; padding: 5px;">✕</button>
+        </div>
         <div>
             <h3>Lists / Projects</h3>
             <div id="listsContainer" class="lists-container" style="margin-top: 10px;"></div>
@@ -53,6 +57,13 @@
             <button id="clearCompletedBtn">Clear Completed</button>
             <button id="clearAllBtn" style="color: var(--danger); border-color: var(--danger);">Clear All Tasks</button>
         </div>
+        
+        <div class="mobile-only" style="display:flex; flex-direction:column; gap:10px; margin-top: 15px;">
+            <hr style="border-color: var(--border-color);">
+            <button id="themeBtnSidebar">🎨 Themes</button>
+            <button onclick="document.getElementById('exportBtn').click()">Export Data</button>
+            <button onclick="document.getElementById('importBtn').click()">Import Data</button>
+        </div>
     </div>
 
     <div class="main">
@@ -65,13 +76,16 @@
                 <option value="High">High</option>
             </select>
             <input type="text" id="taskCategory" placeholder="Category (e.g. Work)" style="width: 140px;">
-            <div style="display:flex; align-items:center; gap:5px;" title="Due Date">
+            <div class="due-date-wrapper" style="display:flex; align-items:center; gap:5px;" title="Due Date">
                 <span style="font-size:0.8em; color:gray;">Due:</span>
                 <input type="datetime-local" id="taskDueDate">
             </div>
-            <div style="display:flex; align-items:center; gap:5px;" title="Optional Reminder Notification">
-                <span style="font-size:0.8em; color:gray;">Reminder:</span>
-                <input type="datetime-local" id="taskReminderDate">
+            <div class="reminder-wrapper" style="display:flex; align-items:center; gap:5px;" title="Remind me in X days/hours">
+                <span style="font-size:0.8em; color:gray;">Reminder in:</span>
+                <input type="number" id="taskReminderDays" placeholder="Days" min="0" style="width: 65px;">
+                <span style="font-size:0.8em; color:gray;">d</span>
+                <input type="number" id="taskReminderHours" placeholder="Hrs" min="0" style="width: 65px;">
+                <span style="font-size:0.8em; color:gray;">h</span>
             </div>
             <select id="taskRecurring" title="Recurring">
                 <option value="None">No Repeat</option>
@@ -118,13 +132,16 @@
         </div>
         
         <div class="modal-row">
-            <div style="display:flex; align-items:center; gap:5px;" title="Due Date">
+            <div class="due-date-wrapper" style="display:flex; align-items:center; gap:5px;" title="Due Date">
                 <span style="font-size:0.8em; color:gray;">Due:</span>
                 <input type="datetime-local" id="editTaskDueDate" style="flex:1;">
             </div>
-            <div style="display:flex; align-items:center; gap:5px;" title="Optional Reminder Notification">
-                <span style="font-size:0.8em; color:gray;">Reminder:</span>
-                <input type="datetime-local" id="editTaskReminderDate" style="flex:1;">
+            <div class="reminder-wrapper" style="display:flex; align-items:center; gap:5px;" title="Remind me in X days/hours">
+                <span style="font-size:0.8em; color:gray;">Reminder in:</span>
+                <input type="number" id="editTaskReminderDays" placeholder="Days" min="0" style="width: 60px;">
+                <span style="font-size:0.8em; color:gray;">d</span>
+                <input type="number" id="editTaskReminderHours" placeholder="Hrs" min="0" style="width: 60px;">
+                <span style="font-size:0.8em; color:gray;">h</span>
             </div>
             <select id="editTaskRecurring">
                 <option value="None">No Repeat</option>
@@ -145,6 +162,24 @@
         <div style="display: flex; gap: 10px; margin-top: 15px; justify-content: flex-end;">
             <button id="cancelEditBtn">Cancel</button>
             <button id="saveEditBtn" style="background-color: var(--success); color: #fff;">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- Theme Modal -->
+<div id="themeModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 500px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>Select Theme</h3>
+            <button id="closeThemeModalBtn" style="background:transparent; border:none; font-size:1.5rem; padding:0; box-shadow:none;">✕</button>
+        </div>
+        <div style="margin-bottom: 15px; margin-top: 10px;">
+            <button id="modalDarkModeToggle" style="width: 100%; font-weight: bold;">🌙 Toggle Dark Mode</button>
+        </div>
+        <h4>Light Backgrounds (20 Colors)</h4>
+        <div id="colorPalette" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 10px; margin-top: 10px;">
+            <!-- Color circles generated by JS -->
         </div>
     </div>
 </div>
