@@ -25,12 +25,26 @@ let state = {
 
 
 // Core Functions
+let dueDateManuallyEdited = false;
+
 function init() {
     loadData();
     applyTheme();
     renderLists();
     renderTasks();
     setDefaultDueDate();
+    
+    // Auto-refresh the default time every minute
+    setInterval(() => {
+        if (!dueDateManuallyEdited) {
+            setDefaultDueDate();
+        }
+    }, 60000);
+    
+    // Track if user manually changes the due date
+    document.getElementById('taskDueDate').addEventListener('input', () => {
+        dueDateManuallyEdited = true;
+    });
     
     // Attach event listeners for real-time filtering
     ['searchInput', 'filterPriority', 'sortOptions'].forEach(id => {
@@ -360,6 +374,7 @@ function addTask() {
     document.getElementById('taskReminderDays').value = '';
     document.getElementById('taskReminderHours').value = '';
     setDefaultDueDate();
+    dueDateManuallyEdited = false; // Reset the flag so auto-refresh resumes
     
     syncTask(newTask);
     renderTasks();
@@ -387,6 +402,7 @@ function handleRecurring(task) {
         newTask.archived = false;
         newTask.dueDate = newDateString;
         newTask.order = state.tasks.filter(t => t.list === state.currentList).length;
+        if (!newTask.subtasks) newTask.subtasks = [];
         newTask.subtasks.forEach(st => {
             st.completed = false;
             st.id = generateId();
@@ -469,6 +485,7 @@ function openEditModal(id) {
 
 function renderEditSubtasks() {
     const list = document.getElementById('editSubtaskList');
+    if (!editingTaskDraft.subtasks) editingTaskDraft.subtasks = [];
     list.innerHTML = editingTaskDraft.subtasks.map(st => `
         <li class="subtask-item" style="justify-content: space-between; border-bottom: 1px solid var(--border-color); padding: 5px 0;">
             <span>${escapeHtml(st.text)}</span>
@@ -822,3 +839,42 @@ function applyTheme() {
 
 // Initialization
 init();
+
+
+// --- PWA LOGIC ---
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(err => console.log('SW registration failed', err));
+    });
+}
+
+let deferredPrompt;
+const installBtn = document.getElementById('installAppBtn');
+const sidebarInstallBtn = document.getElementById('sidebarInstallBtn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (installBtn) installBtn.classList.remove('hidden');
+    if (sidebarInstallBtn) sidebarInstallBtn.classList.remove('hidden');
+});
+
+function handleInstallClick() {
+    if (installBtn) installBtn.classList.add('hidden');
+    if (sidebarInstallBtn) sidebarInstallBtn.classList.add('hidden');
+    
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+            deferredPrompt = null;
+        });
+    }
+}
+
+if (installBtn) installBtn.addEventListener('click', handleInstallClick);
+if (sidebarInstallBtn) sidebarInstallBtn.addEventListener('click', handleInstallClick);
+
+window.addEventListener('appinstalled', (evt) => {
+    console.log('App installed!');
+});
+// --- END PWA LOGIC ---
