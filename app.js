@@ -22,12 +22,7 @@ let state = {
     viewMode: 'active'
 };
 
-// Pomodoro State
-let pomodoro = {
-    time: 25 * 60,
-    interval: null,
-    running: false
-};
+
 
 // Core Functions
 function init() {
@@ -35,7 +30,6 @@ function init() {
     applyTheme();
     renderLists();
     renderTasks();
-    updatePomodoroDisplay();
     setDefaultDueDate();
     
     // Attach event listeners for real-time filtering
@@ -633,68 +627,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Pomodoro Logic
-function updatePomodoroDisplay() {
-    let m = Math.floor(pomodoro.time / 60);
-    let s = pomodoro.time % 60;
-    document.getElementById('pomodoroDisplay').innerText = `${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`;
-}
-function togglePomodoro() {
-    if (!pomodoro.running) {
-        pomodoro.running = true;
-        document.getElementById('pomodoroStartBtn').classList.add('hidden');
-        document.getElementById('pomodoroPauseBtn').classList.remove('hidden');
-        pomodoro.interval = setInterval(() => {
-            if (pomodoro.time > 0) {
-                pomodoro.time--;
-                updatePomodoroDisplay();
-            } else {
-                clearInterval(pomodoro.interval);
-                pomodoro.running = false;
-                document.getElementById('pomodoroStartBtn').classList.remove('hidden');
-                document.getElementById('pomodoroPauseBtn').classList.add('hidden');
-                
-                if ("Notification" in window) {
-                    if (Notification.permission === "granted") {
-                        new Notification("Pomodoro Timer Finished!");
-                    } else if (Notification.permission !== "denied") {
-                        Notification.requestPermission().then(permission => {
-                            if (permission === "granted") new Notification("Pomodoro Timer Finished!");
-                        });
-                    } else {
-                        alert("Pomodoro Timer Finished!");
-                    }
-                } else {
-                    alert("Pomodoro Timer Finished!");
-                }
-            }
-        }, 1000);
-    } else {
-        pomodoro.running = false;
-        clearInterval(pomodoro.interval);
-        document.getElementById('pomodoroStartBtn').classList.remove('hidden');
-        document.getElementById('pomodoroPauseBtn').classList.add('hidden');
-    }
-}
-document.getElementById('pomodoroStartBtn').addEventListener('click', togglePomodoro);
-document.getElementById('pomodoroPauseBtn').addEventListener('click', togglePomodoro);
 
-function resetPomodoro() {
-    pomodoro.running = false;
-    clearInterval(pomodoro.interval);
-    document.getElementById('pomodoroStartBtn').classList.remove('hidden');
-    document.getElementById('pomodoroPauseBtn').classList.add('hidden');
-    pomodoro.time = parseInt(document.getElementById('pomodoroMode').value) * 60;
-    updatePomodoroDisplay();
-}
-document.getElementById('pomodoroResetBtn').addEventListener('click', resetPomodoro);
-
-document.getElementById('pomodoroMode').addEventListener('change', (e) => {
-    if (!pomodoro.running) {
-        pomodoro.time = parseInt(e.target.value) * 60;
-        updatePomodoroDisplay();
-    }
-});
 
 // Request Notification Permission on load
 if ("Notification" in window && Notification.permission !== "denied" && Notification.permission !== "granted") {
@@ -703,3 +636,34 @@ if ("Notification" in window && Notification.permission !== "denied" && Notifica
 
 // Initialization
 init();
+
+// Mobile Sidebar Logic
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const sidebar = document.querySelector('.sidebar');
+const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+function toggleSidebar(forceClose = false) {
+    if (window.innerWidth > 768) return; // Only apply on mobile
+    if (forceClose) {
+        sidebar.classList.remove('open');
+        sidebarOverlay.classList.remove('show');
+    } else {
+        sidebar.classList.toggle('open');
+        sidebarOverlay.classList.toggle('show');
+    }
+}
+
+if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', () => toggleSidebar());
+if(sidebarOverlay) sidebarOverlay.addEventListener('click', () => toggleSidebar(true));
+
+// Auto-close sidebar on mobile when a view or list is clicked
+document.getElementById('listsContainer').addEventListener('click', (e) => {
+    if (e.target.closest('.list-item') || e.target.classList.contains('delete-list-btn')) {
+        toggleSidebar(true);
+    }
+});
+document.getElementById('viewActiveBtn').addEventListener('click', () => toggleSidebar(true));
+document.getElementById('viewCompletedBtn').addEventListener('click', () => toggleSidebar(true));
+document.getElementById('viewArchiveBtn').addEventListener('click', () => toggleSidebar(true));
+document.getElementById('clearCompletedBtn').addEventListener('click', () => toggleSidebar(true));
+document.getElementById('clearAllBtn').addEventListener('click', () => toggleSidebar(true));

@@ -12,7 +12,10 @@
 <body>
 
 <header>
-    <h1>To-Do List</h1>
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <button id="mobileMenuBtn" class="mobile-only" style="font-size: 1.2rem; padding: 4px 10px; background: transparent; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; cursor: pointer;">☰</button>
+        <h1>To-Do List</h1>
+    </div>
     <div class="header-actions">
         <button id="themeToggle">Toggle Dark Mode</button>
         <button id="exportBtn">Export Data</button>
@@ -23,22 +26,6 @@
 
 <div class="container">
     <div class="sidebar">
-        <div>
-            <h3>Pomodoro Timer</h3>
-            <div style="font-size: 2rem; text-align: center; font-weight: bold; margin: 10px 0; font-family: monospace;" id="pomodoroDisplay">25:00</div>
-            <div style="display: flex; gap: 5px;">
-                <button id="pomodoroStartBtn" style="flex: 1; background-color: var(--success); color: white;">Start</button>
-                <button id="pomodoroPauseBtn" style="flex: 1; background-color: var(--warning); color: white;" class="hidden">Pause</button>
-                <button id="pomodoroResetBtn" style="flex: 1;">Reset</button>
-            </div>
-            <select id="pomodoroMode" style="width: 100%; margin-top: 5px;">
-                <option value="25">25 min Work</option>
-                <option value="5">5 min Break</option>
-            </select>
-        </div>
-
-        <hr style="border-color: var(--border-color); margin: 10px 0;">
-
         <div>
             <h3>Lists / Projects</h3>
             <div id="listsContainer" class="lists-container" style="margin-top: 10px;"></div>
@@ -162,6 +149,7 @@
     </div>
 </div>
 
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <script src="app.js"></script>
