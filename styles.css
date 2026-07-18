@@ -197,15 +197,30 @@ textarea {
 
 .task-header {
     display: flex;
-    align-items: center;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
     gap: 10px;
+}
+
+.task-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1 1 100%;
+}
+
+.task-actions {
+    display: flex;
+    gap: 5px;
     flex-wrap: wrap;
 }
+
 .task-text {
-    flex: 1;
-    font-weight: bold;
-    font-size: 1.1rem;
+    flex-grow: 1;
     word-break: break-word;
+    font-size: 1.1rem;
+    font-weight: 500;
 }
 
 .task-meta {
@@ -408,10 +423,13 @@ textarea {
     }
     
     .task-header {
-        display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .task-title-row {
+        flex: 1 1 auto;
         align-items: flex-start;
-        gap: 5px;
     }
     
     .task-checkbox {
@@ -420,17 +438,23 @@ textarea {
     }
     
     .task-text {
-        width: calc(100% - 35px);
-        margin-bottom: 8px;
+        width: 100%;
+        margin-bottom: 5px;
         font-size: 1.1em;
         line-height: 1.4;
     }
     
-    .task-header button {
+    .task-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 5px;
+    }
+    
+    .task-actions button {
         flex: 1 1 30%;
         padding: 8px;
         font-size: 0.85em;
-        margin: 2px;
     }
     
     .task-meta {

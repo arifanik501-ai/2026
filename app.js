@@ -314,12 +314,16 @@ function renderTasks() {
         return `
             <li class="task-item ${task.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}" data-id="${task.id}" draggable="true">
                 <div class="task-header">
-                    <input type="checkbox" class="task-checkbox" data-id="${task.id}" ${task.completed ? 'checked' : ''} style="transform: scale(1.2);">
-                    <span class="task-text">${escapeHtml(task.text)}</span>
-                    <button class="edit-btn" data-id="${task.id}">Edit</button>
-                    <button class="delete-btn" data-id="${task.id}" style="color:var(--danger)">Delete</button>
-                    ${archiveBtn}
-                    ${unarchiveBtn}
+                    <div class="task-title-row">
+                        <input type="checkbox" class="task-checkbox" data-id="${task.id}" ${task.completed ? 'checked' : ''} style="transform: scale(1.2);">
+                        <span class="task-text">${escapeHtml(task.text)}</span>
+                    </div>
+                    <div class="task-actions">
+                        <button class="edit-btn" data-id="${task.id}">Edit</button>
+                        <button class="delete-btn" data-id="${task.id}" style="color:var(--danger)">Delete</button>
+                        ${archiveBtn}
+                        ${unarchiveBtn}
+                    </div>
                 </div>
                 <div class="task-meta">
                     <span class="priority-${task.priority}">[${task.priority}]</span>
