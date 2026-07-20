@@ -10,6 +10,14 @@
     --warning: #cc8800;
     --success: #008800;
     --overdue: #ffe6e6;
+    
+    /* Priority colors (Light Mode) */
+    --priority-low-bg: #f3faf3;
+    --priority-low-border: #2e7d32;
+    --priority-medium-bg: #fffbeb;
+    --priority-medium-border: #ed6c02;
+    --priority-high-bg: #fdf2f2;
+    --priority-high-border: #d32f2f;
 }
 [data-theme="dark"] {
     --bg-color: #081208;
@@ -22,6 +30,14 @@
     --danger: #ff4d4d;
     --warning: #ffb84d;
     --success: #4dff4d;
+    
+    /* Priority colors (Dark Mode) */
+    --priority-low-bg: #0b1a0e;
+    --priority-low-border: #4caf50;
+    --priority-medium-bg: #211503;
+    --priority-medium-border: #ff9800;
+    --priority-high-bg: #1c0808;
+    --priority-high-border: #f44336;
 }
 
 * {
@@ -41,11 +57,20 @@ body {
     color: var(--text-color);
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+body.no-scroll {
     overflow: hidden;
 }
 
 header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: var(--bg-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -63,13 +88,16 @@ header h1 {
 .container {
     display: flex;
     flex: 1;
-    overflow: hidden;
+    align-items: flex-start;
 }
 
 .sidebar {
     width: 280px;
     border-right: 1px solid var(--border-color);
     padding: 20px;
+    position: sticky;
+    top: 61px;
+    height: calc(100dvh - 61px);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -79,7 +107,7 @@ header h1 {
 .main {
     flex: 1;
     padding: 20px;
-    overflow-y: auto;
+    overflow-y: visible;
     display: flex;
     flex-direction: column;
 }
@@ -170,7 +198,7 @@ textarea {
 
 .task-item {
     background-color: var(--task-bg);
-    border: none;
+    border: 2px solid transparent;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     margin-bottom: 12px;
@@ -191,8 +219,8 @@ textarea {
     color: gray;
 }
 .task-item.overdue {
-    background-color: var(--overdue);
     border-color: var(--danger);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
 }
 
 .task-header {
@@ -341,6 +369,111 @@ textarea {
     background: var(--btn-bg);
 }
 
+/* Due Date Wrapper Styling */
+.due-date-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.due-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+.due-input-container {
+    display: flex;
+    align-items: center;
+    background-color: var(--btn-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px; /* Rounded pill style */
+    padding: 2px 6px 2px 12px;
+    gap: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    transition: all 0.25s ease;
+}
+
+.due-input-container:focus-within {
+    border-color: var(--success);
+    box-shadow: 0 0 0 3px rgba(0, 136, 0, 0.15);
+}
+
+.due-input-container input[type="datetime-local"] {
+    background: transparent;
+    border: none;
+    padding: 6px 0;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    box-shadow: none;
+    outline: none;
+}
+
+.due-input-container input[type="datetime-local"]:focus {
+    box-shadow: none;
+    outline: none;
+}
+
+/* Lock Button Style */
+.lock-btn {
+    background: var(--btn-hover);
+    border: none;
+    color: var(--text-color);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.9rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    padding: 0;
+}
+
+.lock-btn:hover {
+    transform: scale(1.1);
+    background: var(--border-color);
+}
+
+.lock-btn:active {
+    transform: scale(0.9) rotate(-15deg);
+}
+
+.lock-btn.locked {
+    background: rgba(0, 136, 0, 0.15);
+    color: var(--success);
+}
+
+.lock-btn.locked:hover {
+    background: rgba(0, 136, 0, 0.25);
+}
+
+/* Task Date Badge Styling */
+.task-date-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: var(--btn-bg);
+    color: var(--text-color);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
+}
+
+.task-date-badge.overdue {
+    background-color: rgba(204, 0, 0, 0.1);
+    color: var(--danger);
+    border-color: rgba(204, 0, 0, 0.2);
+    font-weight: 600;
+}
+
 /* Strict Mobile Overrides */
 @media (max-width: 768px) {
     .mobile-only {
@@ -394,7 +527,19 @@ textarea {
         display: flex;
         flex-direction: column !important;
         align-items: flex-start !important;
-        gap: 3px !important;
+        gap: 5px !important;
+        width: 100%;
+    }
+    
+    .due-input-container {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: space-between !important;
+    }
+
+    .due-input-container input[type="datetime-local"] {
+        width: auto !important;
+        flex: 1 !important;
     }
     
     .reminder-wrapper {
@@ -484,4 +629,18 @@ textarea {
         flex-direction: column;
         gap: 10px;
     }
+}
+
+/* Priority Colors for Task Cards */
+.task-item.priority-card-Low {
+    border-left: 6px solid var(--priority-low-border);
+    background-color: var(--priority-low-bg);
+}
+.task-item.priority-card-Medium {
+    border-left: 6px solid var(--priority-medium-border);
+    background-color: var(--priority-medium-bg);
+}
+.task-item.priority-card-High {
+    border-left: 6px solid var(--priority-high-border);
+    background-color: var(--priority-high-bg);
 }

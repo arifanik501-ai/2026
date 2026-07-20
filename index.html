@@ -84,9 +84,12 @@
                 <option value="High">High</option>
             </select>
             <input type="text" id="taskCategory" placeholder="Category (e.g. Work)" style="width: 140px;">
-            <div class="due-date-wrapper" style="display:flex; align-items:center; gap:5px;" title="Due Date">
-                <span style="font-size:0.8em; color:gray;">Due:</span>
-                <input type="datetime-local" id="taskDueDate">
+            <div class="due-date-wrapper" title="Due Date">
+                <span class="due-label">Due:</span>
+                <div class="due-input-container">
+                    <input type="datetime-local" id="taskDueDate">
+                    <button type="button" id="lockDueDateBtn" class="lock-btn" title="Lock/Unlock Auto-Update">🔒</button>
+                </div>
             </div>
             <div class="reminder-wrapper" style="display:flex; align-items:center; gap:5px;" title="Remind me in X days/hours">
                 <span style="font-size:0.8em; color:gray;">Reminder in:</span>
@@ -140,9 +143,11 @@
         </div>
         
         <div class="modal-row">
-            <div class="due-date-wrapper" style="display:flex; align-items:center; gap:5px;" title="Due Date">
-                <span style="font-size:0.8em; color:gray;">Due:</span>
-                <input type="datetime-local" id="editTaskDueDate" style="flex:1;">
+            <div class="due-date-wrapper" title="Due Date">
+                <span class="due-label">Due:</span>
+                <div class="due-input-container" style="flex: 1; display: flex; width: 100%;">
+                    <input type="datetime-local" id="editTaskDueDate" style="flex: 1; border: none; background: transparent; padding: 6px 0; outline: none; box-shadow: none;">
+                </div>
             </div>
             <div class="reminder-wrapper" style="display:flex; align-items:center; gap:5px;" title="Remind me in X days/hours">
                 <span style="font-size:0.8em; color:gray;">Reminder in:</span>

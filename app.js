@@ -26,6 +26,7 @@ let state = {
 
 // Core Functions
 let dueDateManuallyEdited = false;
+let dueDateLocked = localStorage.getItem('dueDateLocked') !== 'false'; // default to true
 
 function init() {
     loadData();
@@ -36,15 +37,29 @@ function init() {
     
     // Auto-refresh the default time every minute
     setInterval(() => {
-        if (!dueDateManuallyEdited) {
+        if (!dueDateLocked && !dueDateManuallyEdited) {
             setDefaultDueDate();
         }
     }, 60000);
     
     // Track if user manually changes the due date
-    document.getElementById('taskDueDate').addEventListener('input', () => {
-        dueDateManuallyEdited = true;
-    });
+    const dueDateInput = document.getElementById('taskDueDate');
+    if (dueDateInput) {
+        dueDateInput.addEventListener('input', () => {
+            dueDateManuallyEdited = true;
+        });
+    }
+
+    // Lock/Unlock Due Date logic
+    const lockBtn = document.getElementById('lockDueDateBtn');
+    if (lockBtn) {
+        updateLockBtnUI();
+        lockBtn.addEventListener('click', () => {
+            dueDateLocked = !dueDateLocked;
+            localStorage.setItem('dueDateLocked', dueDateLocked);
+            updateLockBtnUI();
+        });
+    }
     
     // Attach event listeners for real-time filtering
     ['searchInput', 'filterPriority', 'sortOptions'].forEach(id => {
@@ -93,7 +108,33 @@ function setDefaultDueDate() {
     const hours = String(dhakaTime.getUTCHours()).padStart(2, '0');
     const minutes = String(dhakaTime.getUTCMinutes()).padStart(2, '0');
     
-    document.getElementById('taskDueDate').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    const formattedVal = `${year}-${month}-${day}T${hours}:${minutes}`;
+    const dueDateInput = document.getElementById('taskDueDate');
+    if (dueDateInput) {
+        dueDateInput.value = formattedVal;
+    }
+}
+
+function updateLockBtnUI() {
+    const lockBtn = document.getElementById('lockDueDateBtn');
+    const dueDateInput = document.getElementById('taskDueDate');
+    if (lockBtn) {
+        if (dueDateLocked) {
+            lockBtn.textContent = '🔒';
+            lockBtn.classList.add('locked');
+            lockBtn.title = 'Due date is locked (will not auto-refresh)';
+            if (dueDateInput) {
+                dueDateInput.disabled = true;
+            }
+        } else {
+            lockBtn.textContent = '🔓';
+            lockBtn.classList.remove('locked');
+            lockBtn.title = 'Due date is unlocked (will auto-refresh)';
+            if (dueDateInput) {
+                dueDateInput.disabled = false;
+            }
+        }
+    }
 }
 
 function loadData() {
@@ -301,7 +342,7 @@ function renderTasks() {
         let archiveBtn = state.viewMode !== 'archived' ? `<button class="archive-btn" data-id="${task.id}">Archive</button>` : '';
         let unarchiveBtn = state.viewMode === 'archived' ? `<button class="unarchive-btn" data-id="${task.id}">Unarchive</button>` : '';
         let catHtml = task.category ? `<span>🏷️ ${escapeHtml(task.category)}</span>` : '';
-        let dateHtml = formattedDate ? `<span style="${isOverdue ? 'color:var(--danger);font-weight:bold;' : ''}">📅 Due: ${formattedDate}</span>` : '';
+        let dateHtml = formattedDate ? `<span class="task-date-badge ${isOverdue ? 'overdue' : ''}">📅 ${formattedDate}</span>` : '';
         
         let reminderHtml = '';
         if (task.reminderDate) {
@@ -312,7 +353,7 @@ function renderTasks() {
         let recurHtml = task.recurring && task.recurring !== 'None' ? `<span>🔁 ${task.recurring}</span>` : '';
 
         return `
-            <li class="task-item ${task.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}" data-id="${task.id}" draggable="true">
+            <li class="task-item ${task.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''} priority-card-${task.priority}" data-id="${task.id}" draggable="true">
                 <div class="task-header">
                     <div class="task-title-row">
                         <input type="checkbox" class="task-checkbox" data-id="${task.id}" ${task.completed ? 'checked' : ''} style="transform: scale(1.2);">
@@ -710,9 +751,11 @@ function toggleSidebar(forceClose = false) {
     if (forceClose) {
         sidebar.classList.remove('open');
         sidebarOverlay.classList.remove('show');
+        document.body.classList.remove('no-scroll');
     } else {
-        sidebar.classList.toggle('open');
+        const isOpen = sidebar.classList.toggle('open');
         sidebarOverlay.classList.toggle('show');
+        document.body.classList.toggle('no-scroll', isOpen);
     }
 }
 
