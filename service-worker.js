@@ -2,8 +2,8 @@ const CACHE_NAME = 'todo-pwa-cache-v1';
 const urlsToCache = [
   './',
   './index.html',
-  './css/styles.css',
-  './js/app.js',
+  './styles.css',
+  './app.js',
   './logo.svg'
 ];
 
