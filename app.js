@@ -14,12 +14,22 @@ const db = firebase.database();
 const dbRef = db.ref('todo_app_data');
 
 // Application State
+const savedTheme = localStorage.getItem('appTheme') || 'light-0';
+const savedViewMode = localStorage.getItem('appViewMode') || 'active';
+const savedCurrentList = localStorage.getItem('appCurrentList') || 'Default';
+
+let cachedTasks = [];
+try { cachedTasks = JSON.parse(localStorage.getItem('cachedTasks') || '[]'); } catch(e) {}
+
+let cachedLists = ['Default'];
+try { cachedLists = JSON.parse(localStorage.getItem('cachedLists') || '["Default"]'); } catch(e) {}
+
 let state = {
-    tasks: [],
-    lists: ['Default'],
-    currentList: 'Default',
-    theme: 'light',
-    viewMode: 'active'
+    tasks: cachedTasks,
+    lists: cachedLists,
+    currentList: savedCurrentList,
+    theme: savedTheme,
+    viewMode: savedViewMode
 };
 
 
@@ -28,18 +38,54 @@ let state = {
 let dueDateManuallyEdited = false;
 let dueDateLocked = localStorage.getItem('dueDateLocked') !== 'false'; // default to true
 
+// Daily Tasks Helpers
+function getTodayDateString() {
+    const now = new Date();
+    const dhakaMs = now.getTime() + (6 * 60 * 60 * 1000);
+    const d = new Date(dhakaMs);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function checkAndResetDailyTasks() {
+    const todayStr = getTodayDateString();
+    let updated = false;
+
+    state.tasks.forEach(task => {
+        if (task.isDaily) {
+            if (task.lastResetDate !== todayStr) {
+                task.completed = false;
+                task.lastResetDate = todayStr;
+                if (task.subtasks) {
+                    task.subtasks.forEach(st => st.completed = false);
+                }
+                updated = true;
+            }
+        }
+    });
+
+    if (updated) {
+        syncAllTasks();
+    }
+}
+
 function init() {
     loadData();
     applyTheme();
     renderLists();
+    checkAndResetDailyTasks();
     renderTasks();
     setDefaultDueDate();
     
-    // Auto-refresh the default time every minute
+    // Auto-refresh default time, daily resets, and task pending durations every minute
     setInterval(() => {
         if (!dueDateLocked && !dueDateManuallyEdited) {
             setDefaultDueDate();
         }
+        checkAndResetDailyTasks();
+        renderTasks();
     }, 60000);
     
     // Track if user manually changes the due date
@@ -60,10 +106,24 @@ function init() {
             updateLockBtnUI();
         });
     }
+
+    // Import Daily Tasks Modal listeners
+    const openImportBtn = document.getElementById('openImportDailyBtn');
+    if (openImportBtn) openImportBtn.addEventListener('click', openImportDailyModal);
+    
+    const closeImportBtn = document.getElementById('closeImportDailyModalBtn');
+    if (closeImportBtn) closeImportBtn.addEventListener('click', closeImportDailyModal);
+    
+    const cancelImportBtn = document.getElementById('cancelImportDailyBtn');
+    if (cancelImportBtn) cancelImportBtn.addEventListener('click', closeImportDailyModal);
+    
+    const submitImportBtn = document.getElementById('submitImportDailyBtn');
+    if (submitImportBtn) submitImportBtn.addEventListener('click', importDailyTasks);
     
     // Attach event listeners for real-time filtering
-    ['searchInput', 'filterPriority', 'sortOptions'].forEach(id => {
-        document.getElementById(id).addEventListener('input', renderTasks);
+    ['searchInput', 'filterPriority', 'sortOptions', 'sortOrder'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', renderTasks);
     });
     
     // Check reminders every 10 seconds
@@ -157,9 +217,18 @@ function loadData() {
             } else {
                 state.lists = ['Default'];
             }
-            state.theme = data.theme || 'light';
+            if (data.theme) {
+                state.theme = data.theme;
+                localStorage.setItem('appTheme', data.theme);
+            }
         }
+        try {
+            localStorage.setItem('cachedTasks', JSON.stringify(state.tasks));
+            localStorage.setItem('cachedLists', JSON.stringify(state.lists));
+        } catch(e) {}
+
         // Force UI updates when cloud data arrives
+        checkAndResetDailyTasks();
         applyTheme();
         renderLists();
         renderTasks();
@@ -169,20 +238,24 @@ function loadData() {
 
 function syncTask(task) {
     dbRef.child('tasks').child(task.id).set(task);
+    try { localStorage.setItem('cachedTasks', JSON.stringify(state.tasks)); } catch(e) {}
 }
 
 function syncDeleteTask(taskId) {
     dbRef.child('tasks').child(taskId).remove();
+    try { localStorage.setItem('cachedTasks', JSON.stringify(state.tasks)); } catch(e) {}
 }
 
 function syncAllTasks() {
     let updates = {};
     state.tasks.forEach(t => { updates[t.id] = t; });
     dbRef.child('tasks').set(updates);
+    try { localStorage.setItem('cachedTasks', JSON.stringify(state.tasks)); } catch(e) {}
 }
 
 function syncLists() {
     dbRef.child('lists').set(state.lists);
+    try { localStorage.setItem('cachedLists', JSON.stringify(state.lists)); } catch(e) {}
 }
 
 function syncTheme() {
@@ -233,8 +306,21 @@ function updateStats() {
     
     // Update view button weights
     document.getElementById('viewActiveBtn').style.fontWeight = state.viewMode === 'active' ? 'bold' : 'normal';
+    if (document.getElementById('viewDailyBtn')) {
+        document.getElementById('viewDailyBtn').style.fontWeight = state.viewMode === 'daily' ? 'bold' : 'normal';
+    }
     document.getElementById('viewCompletedBtn').style.fontWeight = state.viewMode === 'completed' ? 'bold' : 'normal';
     document.getElementById('viewArchiveBtn').style.fontWeight = state.viewMode === 'archived' ? 'bold' : 'normal';
+
+    const dailyHeader = document.getElementById('dailyHeader');
+    if (dailyHeader) {
+        dailyHeader.classList.toggle('hidden', state.viewMode !== 'daily');
+    }
+
+    const taskInput = document.getElementById('taskText');
+    if (taskInput) {
+        taskInput.placeholder = state.viewMode === 'daily' ? "Add a new daily task..." : "What needs to be done?";
+    }
 }
 
 function renderLists() {
@@ -253,13 +339,15 @@ function renderLists() {
 function getFilteredAndSortedTasks() {
     let list = state.tasks.filter(t => t.list === state.currentList);
     
-    if (state.viewMode === 'archived') {
+    if (state.viewMode === 'daily') {
+        list = list.filter(t => t.isDaily && !t.archived);
+    } else if (state.viewMode === 'archived') {
         list = list.filter(t => t.archived);
     } else if (state.viewMode === 'completed') {
-        list = list.filter(t => t.completed && !t.archived);
+        list = list.filter(t => t.completed && !t.archived && !t.isDaily);
     } else {
-        // active view shows only pending tasks
-        list = list.filter(t => !t.completed && !t.archived);
+        // active view shows only pending normal (non-daily) tasks
+        list = list.filter(t => !t.completed && !t.archived && !t.isDaily);
     }
 
     const search = document.getElementById('searchInput').value.toLowerCase();
@@ -273,18 +361,24 @@ function getFilteredAndSortedTasks() {
         return matchesSearch && matchesPriority;
     });
 
+    const sortOrder = document.getElementById('sortOrder')?.value || 'asc';
+    const isAsc = sortOrder === 'asc';
+
     list.sort((a, b) => {
         if (sort === 'default') {
             return (a.order || 0) - (b.order || 0);
         } else if (sort === 'alpha') {
-            return a.text.localeCompare(b.text);
+            const comp = a.text.localeCompare(b.text);
+            return isAsc ? comp : -comp;
         } else if (sort === 'dueDate') {
             if (!a.dueDate) return 1;
             if (!b.dueDate) return -1;
-            return new Date(a.dueDate) - new Date(b.dueDate);
+            const comp = new Date(a.dueDate) - new Date(b.dueDate);
+            return isAsc ? comp : -comp;
         } else if (sort === 'priority') {
             const p = { 'High': 3, 'Medium': 2, 'Low': 1 };
-            return (p[b.priority] || 0) - (p[a.priority] || 0);
+            const comp = (p[a.priority] || 0) - (p[b.priority] || 0);
+            return isAsc ? comp : -comp;
         }
     });
 
@@ -305,6 +399,12 @@ function parseMarkdown(text) {
 
 function renderTasks() {
     const listEl = document.getElementById('taskList');
+    const sortVal = document.getElementById('sortOptions')?.value;
+    const sortOrderSelect = document.getElementById('sortOrder');
+    if (sortOrderSelect) {
+        sortOrderSelect.disabled = (sortVal === 'default');
+    }
+
     const tasks = getFilteredAndSortedTasks();
     
     if (tasks.length === 0) {
@@ -316,11 +416,51 @@ function renderTasks() {
     listEl.innerHTML = tasks.map(task => {
         let isOverdue = false;
         let formattedDate = '';
+        let pendingText = '';
         if (task.dueDate) {
             const d = new Date(task.dueDate);
-            formattedDate = d.toLocaleString('en-US', { timeZone: 'Asia/Dhaka', dateStyle: 'short', timeStyle: 'short' });
-            if (!task.completed && d < new Date()) {
-                isOverdue = true;
+            const now = new Date();
+            if (!isNaN(d.getTime())) {
+                formattedDate = d.toLocaleString('en-US', { timeZone: 'Asia/Dhaka', dateStyle: 'short', timeStyle: 'short' });
+                if (!task.completed && d < now) {
+                    isOverdue = true;
+                }
+
+                if (!task.completed) {
+                    const diffMs = now - d;
+                    if (diffMs >= 0) {
+                        const totalMins = Math.floor(diffMs / 60000);
+                        const totalHrs = Math.floor(totalMins / 60);
+                        const days = Math.floor(totalHrs / 24);
+                        const hrs = totalHrs % 24;
+                        const mins = totalMins % 60;
+
+                        if (days > 0) {
+                            pendingText = `${days}d ${hrs}h pending`;
+                        } else if (hrs > 0) {
+                            pendingText = `${hrs}h ${mins}m pending`;
+                        } else if (mins > 0) {
+                            pendingText = `${mins}m pending`;
+                        } else {
+                            pendingText = `Just now`;
+                        }
+                    } else {
+                        const diffMsFuture = d - now;
+                        const totalMins = Math.floor(diffMsFuture / 60000);
+                        const totalHrs = Math.floor(totalMins / 60);
+                        const days = Math.floor(totalHrs / 24);
+                        const hrs = totalHrs % 24;
+                        const mins = totalMins % 60;
+
+                        if (days > 0) {
+                            pendingText = `Due in ${days}d ${hrs}h`;
+                        } else if (hrs > 0) {
+                            pendingText = `Due in ${hrs}h ${mins}m`;
+                        } else {
+                            pendingText = `Due in ${mins}m`;
+                        }
+                    }
+                }
             }
         }
 
@@ -343,6 +483,7 @@ function renderTasks() {
         let unarchiveBtn = state.viewMode === 'archived' ? `<button class="unarchive-btn" data-id="${task.id}">Unarchive</button>` : '';
         let catHtml = task.category ? `<span>🏷️ ${escapeHtml(task.category)}</span>` : '';
         let dateHtml = formattedDate ? `<span class="task-date-badge ${isOverdue ? 'overdue' : ''}">📅 ${formattedDate}</span>` : '';
+        let pendingHtml = pendingText ? `<span class="task-pending-badge ${isOverdue ? 'overdue' : ''}">⏳ ${pendingText}</span>` : '';
         
         let reminderHtml = '';
         if (task.reminderDate) {
@@ -351,6 +492,7 @@ function renderTasks() {
         }
         
         let recurHtml = task.recurring && task.recurring !== 'None' ? `<span>🔁 ${task.recurring}</span>` : '';
+        let dailyBadgeHtml = task.isDaily ? `<span class="task-daily-badge" style="background: var(--btn-hover); color: var(--text-color); padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 0.8em;">☀️ Daily Task</span>` : '';
 
         return `
             <li class="task-item ${task.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''} priority-card-${task.priority}" data-id="${task.id}" draggable="true">
@@ -368,8 +510,10 @@ function renderTasks() {
                 </div>
                 <div class="task-meta">
                     <span class="priority-${task.priority}">[${task.priority}]</span>
+                    ${dailyBadgeHtml}
                     ${catHtml}
                     ${dateHtml}
+                    ${pendingHtml}
                     ${reminderHtml}
                     ${recurHtml}
                 </div>
@@ -396,6 +540,8 @@ function addTask() {
     const text = textEl.value.trim();
     if (!text) return;
 
+    const isDaily = state.viewMode === 'daily';
+
     const newTask = {
         id: generateId(),
         list: state.currentList,
@@ -406,6 +552,8 @@ function addTask() {
         reminderDate: (remDays > 0 || remHours > 0) ? new Date(Date.now() + ((remDays * 24 + remHours) * 3600000)).toISOString() : '',
         reminderNotified: false,
         recurring: recurringEl.value,
+        isDaily: isDaily,
+        lastResetDate: getTodayDateString(),
         completed: false,
         archived: false,
         notes: detailsEl.value.trim(),
@@ -425,6 +573,61 @@ function addTask() {
     renderTasks();
 }
 document.getElementById('addTaskBtn').addEventListener('click', addTask);
+
+// Import Daily Tasks Modal Logic
+function openImportDailyModal() {
+    const modal = document.getElementById('importDailyModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeImportDailyModal() {
+    const modal = document.getElementById('importDailyModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function importDailyTasks() {
+    const todayStr = getTodayDateString();
+    const customInput = document.getElementById('customDailyTasksInput');
+    const customText = customInput ? customInput.value.trim() : '';
+    
+    if (!customText) {
+        alert('Please enter at least one task (one task per line).');
+        return;
+    }
+
+    const taskTexts = customText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    taskTexts.forEach(txt => {
+        const exists = state.tasks.some(t => t.isDaily && t.list === state.currentList && t.text.toLowerCase() === txt.toLowerCase() && !t.archived);
+        if (!exists) {
+            const newTask = {
+                id: generateId(),
+                list: state.currentList,
+                text: txt,
+                priority: 'Medium',
+                category: 'Daily Routine',
+                dueDate: '',
+                reminderDate: '',
+                reminderNotified: false,
+                recurring: 'None',
+                isDaily: true,
+                lastResetDate: todayStr,
+                completed: false,
+                archived: false,
+                notes: '',
+                subtasks: [],
+                order: state.tasks.filter(t => t.list === state.currentList).length
+            };
+            state.tasks.push(newTask);
+        }
+    });
+
+    if (customInput) customInput.value = '';
+    closeImportDailyModal();
+
+    syncAllTasks();
+    renderTasks();
+}
 
 function handleRecurring(task) {
     if (task.recurring === 'Daily' || task.recurring === 'Weekly') {
@@ -462,8 +665,13 @@ function handleRecurring(task) {
 document.getElementById('taskList').addEventListener('click', (e) => {
     if (e.target.classList.contains('delete-btn')) {
         const id = e.target.dataset.id;
-        state.tasks = state.tasks.filter(t => t.id !== id);
-        syncDeleteTask(id); renderTasks();
+        const task = state.tasks.find(t => t.id === id);
+        const taskName = task ? `"${task.text}"` : 'this task';
+        if (confirm(`Are you sure you want to delete ${taskName}?`)) {
+            state.tasks = state.tasks.filter(t => t.id !== id);
+            syncDeleteTask(id); 
+            renderTasks();
+        }
     } else if (e.target.classList.contains('task-checkbox')) {
         const id = e.target.dataset.id;
         const task = state.tasks.find(t => t.id === id);
@@ -597,13 +805,14 @@ document.getElementById('listsContainer').addEventListener('click', (e) => {
             const deletedTasks = state.tasks.filter(t => t.list === listName);
             state.tasks = state.tasks.filter(t => t.list !== listName);
             state.currentList = 'Default';
+            localStorage.setItem('appCurrentList', 'Default');
             syncLists();
             deletedTasks.forEach(t => syncDeleteTask(t.id));
             renderLists(); renderTasks();
         }
     } else if (e.target.closest('.list-item')) {
         state.currentList = e.target.closest('.list-item').dataset.name;
-        state.viewMode = 'active';
+        localStorage.setItem('appCurrentList', state.currentList);
         renderLists(); renderTasks();
     }
 });
@@ -613,6 +822,7 @@ document.getElementById('addListBtn').addEventListener('click', () => {
     if (name && !state.lists.includes(name)) {
         state.lists.push(name);
         state.currentList = name;
+        localStorage.setItem('appCurrentList', name);
         input.value = '';
         syncLists(); renderLists(); renderTasks();
     }
@@ -657,62 +867,97 @@ taskListEl.addEventListener('drop', (e) => {
 
 // Additional Actions
 document.getElementById('viewActiveBtn').addEventListener('click', () => {
-    state.viewMode = 'active'; renderTasks();
+    state.viewMode = 'active';
+    localStorage.setItem('appViewMode', 'active');
+    document.documentElement.setAttribute('data-view', 'active');
+    renderTasks();
 });
+if (document.getElementById('viewDailyBtn')) {
+    document.getElementById('viewDailyBtn').addEventListener('click', () => {
+        state.viewMode = 'daily';
+        localStorage.setItem('appViewMode', 'daily');
+        document.documentElement.setAttribute('data-view', 'daily');
+        renderTasks();
+    });
+}
 document.getElementById('viewCompletedBtn').addEventListener('click', () => {
-    state.viewMode = 'completed'; renderTasks();
+    state.viewMode = 'completed';
+    localStorage.setItem('appViewMode', 'completed');
+    document.documentElement.setAttribute('data-view', 'completed');
+    renderTasks();
 });
 document.getElementById('viewArchiveBtn').addEventListener('click', () => {
-    state.viewMode = 'archived'; renderTasks();
+    state.viewMode = 'archived';
+    localStorage.setItem('appViewMode', 'archived');
+    document.documentElement.setAttribute('data-view', 'archived');
+    renderTasks();
 });
 
 document.getElementById('clearCompletedBtn').addEventListener('click', () => {
-    if (confirm('Delete all completed tasks in the current view?')) {
-        const toDelete = state.tasks.filter(t => t.list === state.currentList && t.archived === (state.viewMode === 'archived') && t.completed);
+    const toDelete = state.tasks.filter(t => t.list === state.currentList && t.archived === (state.viewMode === 'archived') && t.completed);
+    if (toDelete.length === 0) {
+        alert('No completed tasks to clear in this view.');
+        return;
+    }
+    if (confirm(`Are you sure you want to permanently delete ${toDelete.length} completed task(s)?`)) {
         state.tasks = state.tasks.filter(t => !toDelete.includes(t));
         toDelete.forEach(t => syncDeleteTask(t.id));
         renderTasks();
     }
 });
 document.getElementById('clearAllBtn').addEventListener('click', () => {
-    if (confirm('Delete ALL tasks in this list?')) {
-        const toDelete = state.tasks.filter(t => t.list === state.currentList);
-        state.tasks = state.tasks.filter(t => t.list !== state.currentList);
+    const toDelete = state.tasks.filter(t => t.list === state.currentList);
+    if (toDelete.length === 0) {
+        alert(`No tasks to clear in '${state.currentList}' list.`);
+        return;
+    }
+    if (confirm(`Are you sure you want to permanently delete ALL ${toDelete.length} task(s) in '${state.currentList}' list? This action cannot be undone.`)) {
+        state.tasks = state.tasks.filter(t => !toDelete.includes(t));
         toDelete.forEach(t => syncDeleteTask(t.id));
         renderTasks();
     }
 });
 
 // Import/Export
-document.getElementById('exportBtn').addEventListener('click', () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
-    const a = document.createElement('a');
-    a.href = dataStr;
-    a.download = `todo_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-});
-document.getElementById('importBtn').addEventListener('click', () => {
-    document.getElementById('importFile').click();
-});
-document.getElementById('importFile').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (data && Array.isArray(data.tasks)) {
-                state = data;
-                syncAllTasks(); syncLists(); syncTheme(); applyTheme(); renderLists(); renderTasks();
-                alert('Data imported successfully!');
+const exportBtn = document.getElementById('exportBtn');
+if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = `todo_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+    });
+}
+const importBtn = document.getElementById('importBtn');
+if (importBtn) {
+    importBtn.addEventListener('click', () => {
+        const importFile = document.getElementById('importFile');
+        if (importFile) importFile.click();
+    });
+}
+const importFile = document.getElementById('importFile');
+if (importFile) {
+    importFile.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (data && Array.isArray(data.tasks)) {
+                    state = data;
+                    syncAllTasks(); syncLists(); syncTheme(); applyTheme(); renderLists(); renderTasks();
+                    alert('Data imported successfully!');
+                }
+            } catch(err) {
+                alert('Invalid JSON file.');
             }
-        } catch(err) {
-            alert('Invalid JSON file.');
-        }
-    };
-    reader.readAsText(file);
-    e.target.value = ''; // reset
-});
+        };
+        reader.readAsText(file);
+        e.target.value = ''; // reset
+    });
+}
 
 // Theme
 
@@ -770,6 +1015,7 @@ document.getElementById('listsContainer').addEventListener('click', (e) => {
     }
 });
 document.getElementById('viewActiveBtn').addEventListener('click', () => toggleSidebar(true));
+if (document.getElementById('viewDailyBtn')) document.getElementById('viewDailyBtn').addEventListener('click', () => toggleSidebar(true));
 document.getElementById('viewCompletedBtn').addEventListener('click', () => toggleSidebar(true));
 document.getElementById('viewArchiveBtn').addEventListener('click', () => toggleSidebar(true));
 document.getElementById('clearCompletedBtn').addEventListener('click', () => toggleSidebar(true));
@@ -834,14 +1080,13 @@ function renderColorPalette() {
         btn.style.cursor = 'pointer';
         btn.style.transition = 'none';
         
-        if (state.theme === t.id || (state.theme === 'light' && index === 7)) { // 7 is a nice greenish default fallback
+        if (state.theme === t.id || (state.theme === 'light' && index === 0)) {
             btn.style.boxShadow = '0 0 0 3px var(--text-color)';
         }
         
-        // removed hover scale
-        // removed hover scale
         btn.addEventListener('click', () => {
             state.theme = t.id;
+            localStorage.setItem('appTheme', t.id);
             applyTheme();
             syncTheme();
             renderColorPalette();
@@ -852,6 +1097,7 @@ function renderColorPalette() {
 
 modalDarkModeToggle.addEventListener('click', () => {
     state.theme = 'dark';
+    localStorage.setItem('appTheme', 'dark');
     applyTheme();
     syncTheme();
     renderColorPalette();
@@ -871,8 +1117,7 @@ function applyTheme() {
         
         let selectedTheme = lightThemes.find(t => t.id === state.theme);
         if (!selectedTheme) {
-            // Default to something greenish if state.theme is just 'light'
-            selectedTheme = lightThemes[7]; 
+            selectedTheme = lightThemes[0]; // Clean mint default instead of yellow
         }
         
         document.documentElement.style.setProperty('--bg-color', selectedTheme.bg);
@@ -882,6 +1127,9 @@ function applyTheme() {
         document.documentElement.style.setProperty('--border-color', selectedTheme.border);
     }
 }
+
+// Apply saved theme immediately on script evaluation
+applyTheme();
 // --- END THEME LOGIC ---
 
 // Initialization
@@ -925,3 +1173,306 @@ window.addEventListener('appinstalled', (evt) => {
     console.log('App installed!');
 });
 // --- END PWA LOGIC ---
+
+// --- AI CHAT ASSISTANT LOGIC ---
+(function() {
+    const aiBubble = document.getElementById('aiChatBubble');
+    const aiPanel = document.getElementById('aiChatPanel');
+    const closeBtn = document.getElementById('closeAiChatBtn');
+    const sendBtn = document.getElementById('sendAiChatBtn');
+    const chatInput = document.getElementById('aiChatInput');
+    const chatBody = document.getElementById('aiChatBody');
+
+    // Specify your OpenRouter API Keys directly here
+    const openRouterKeys = [
+        "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",
+        "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"
+    ];
+    let currentKeyIndex = 0;
+
+    async function fetchOpenRouter(payload) {
+        if (!openRouterKeys[currentKeyIndex]) {
+            throw new Error("No API key configured.");
+        }
+        let response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${openRouterKeys[currentKeyIndex]}`,
+                "HTTP-Referer": window.location.origin,
+                "X-Title": "To-Do List Assistant"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        // Fallback to alternative key if limit exhausted (402), unauthorized (401), or rate-limited (429)
+        if (!response.ok && (response.status === 401 || response.status === 402 || response.status === 403 || response.status === 429)) {
+            if (currentKeyIndex < openRouterKeys.length - 1) {
+                console.warn(`Primary API key failed (Status: ${response.status}). Trying alternative key...`);
+                currentKeyIndex++;
+                response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${openRouterKeys[currentKeyIndex]}`,
+                        "HTTP-Referer": window.location.origin,
+                        "X-Title": "To-Do List Assistant"
+                    },
+                    body: JSON.stringify(payload)
+                });
+            }
+        }
+        return response;
+    }
+
+    // Toggle panel
+    if (aiBubble && aiPanel) {
+        aiBubble.addEventListener('click', () => {
+            aiPanel.classList.toggle('hidden');
+            if (!aiPanel.classList.contains('hidden')) {
+                chatInput.focus();
+                chatBody.scrollTop = chatBody.scrollHeight;
+            }
+        });
+    }
+
+    if (closeBtn && aiPanel) {
+        closeBtn.addEventListener('click', () => {
+            aiPanel.classList.add('hidden');
+        });
+    }
+
+    // Append Message to body
+    function appendMessage(sender, text) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `ai-chat-message ${sender}`;
+        
+        // Simple markdown links support
+        let parsedText = escapeHtml(text);
+        parsedText = parsedText.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+        parsedText = parsedText.replace(/\n/g, '<br>');
+        
+        msgDiv.innerHTML = parsedText;
+        chatBody.appendChild(msgDiv);
+        chatBody.scrollTop = chatBody.scrollHeight;
+        return msgDiv;
+    }
+
+    // Typing Indicator
+    let typingIndicator = null;
+    function showTypingIndicator() {
+        if (typingIndicator) return;
+        typingIndicator = document.createElement('div');
+        typingIndicator.className = 'ai-chat-typing';
+        typingIndicator.innerHTML = `
+            <div class="ai-chat-dot"></div>
+            <div class="ai-chat-dot"></div>
+            <div class="ai-chat-dot"></div>
+        `;
+        chatBody.appendChild(typingIndicator);
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+        if (typingIndicator) {
+            typingIndicator.remove();
+            typingIndicator = null;
+        }
+    }
+
+    // Send chat logic
+    async function handleSend() {
+        const userMsg = chatInput.value.trim();
+        if (!userMsg) return;
+
+        if (!openRouterKeys[currentKeyIndex]) {
+            alert('OpenRouter API Keys are missing. Please configure them in app.js.');
+            return;
+        }
+
+        // Add user message to UI
+        appendMessage('user', userMsg);
+        chatInput.value = '';
+
+        showTypingIndicator();
+
+        // Compile tasks context
+        const activeTasks = state.tasks.filter(t => !t.completed && !t.archived);
+        const taskContext = activeTasks.map(t => {
+            let details = `- [${t.priority} Priority] "${t.text}"`;
+            if (t.dueDate) details += ` (Due: ${t.dueDate})`;
+            if (t.isDaily) details += ` [Daily Task]`;
+            return details;
+        }).join('\n');
+
+        const systemPrompt = `You are a highly capable, intelligent, and friendly AI Assistant. You can answer any questions, write content, write code, solve problems, or chat about anything the user wants.
+
+For context, the user is also viewing their daily To-Do List. If their query is related to their tasks, projects, or schedule, you can refer to their current active tasks:
+${taskContext || "No active tasks in current list."}
+
+Always feel free to answer any prompt or request directly, regardless of whether it is about tasks or not. Keep your responses engaging, helpful, and formatted nicely.`;
+
+        try {
+            const response = await fetchOpenRouter({
+                model: "google/gemma-4-26b-a4b-it:free",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userMsg }
+                ],
+                stream: true
+            });
+
+            removeTypingIndicator();
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `HTTP ${response.status}`);
+            }
+
+            // Client-side Streaming Reader
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let aiMessageDiv = appendMessage('ai', '');
+            let aiResponseBuffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split("\n").filter(line => line.trim() !== "");
+
+                for (const line of lines) {
+                    if (line.startsWith("data: ")) {
+                        const dataStr = line.slice(6).trim();
+                        if (dataStr === "[DONE]") continue;
+
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            const token = parsed.choices[0]?.delta?.content;
+                            if (token) {
+                                aiResponseBuffer += token;
+                                
+                                // Update message text inline
+                                let parsedText = escapeHtml(aiResponseBuffer);
+                                parsedText = parsedText.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+                                parsedText = parsedText.replace(/\n/g, '<br>');
+                                aiMessageDiv.innerHTML = parsedText;
+                                chatBody.scrollTop = chatBody.scrollHeight;
+                            }
+                        } catch (e) {
+                            // Suppress json parsing noise during chunk segments
+                        }
+                    }
+                }
+            }
+
+        } catch (error) {
+            removeTypingIndicator();
+            appendMessage('ai', `Sorry, I encountered an error: ${error.message}. Please check your API key.`);
+        }
+    }
+
+    if (sendBtn) sendBtn.addEventListener('click', handleSend);
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                handleSend();
+            }
+        });
+    }
+
+    // AI Magic Grammar Fix helper
+    async function runGrammarFix(inputElements, buttonElement) {
+        // Normalize single element to array
+        const elements = Array.isArray(inputElements) ? inputElements : [inputElements];
+        
+        // Filter out empty elements
+        const activeElements = elements.filter(el => el && el.value.trim());
+        if (activeElements.length === 0) return;
+        
+        const originalContent = buttonElement.innerHTML;
+        buttonElement.innerHTML = '⏳';
+        buttonElement.disabled = true;
+        
+        try {
+            // Correct each active element in parallel
+            await Promise.all(activeElements.map(async (inputElement) => {
+                const text = inputElement.value.trim();
+                const isMultiLine = inputElement.tagName.toLowerCase() === 'textarea';
+                
+                let systemPrompt = "You are a professional grammar and spelling corrector. Correct the user's input text for grammar, spelling, capitalisation, and punctuation. Return ONLY the corrected sentence. Do NOT add any notes, explanation, extra words, quotes, or markdown formatting.";
+                if (isMultiLine) {
+                    systemPrompt = "You are a professional grammar and spelling corrector. Correct the user's multi-line text input line-by-line. Correct each line for grammar, spelling, capitalisation, and punctuation. Keep the lines separate, maintaining the original number of lines. Return ONLY the corrected lines. Do NOT add notes, explanation, extra words, list numbers, bullet points, quotes, or markdown formatting.";
+                }
+
+                const response = await fetchOpenRouter({
+                    model: "google/gemma-4-26b-a4b-it:free",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: text }
+                    ]
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                const correctedText = data.choices[0]?.message?.content?.trim();
+                if (correctedText) {
+                    let cleaned = correctedText;
+                    if (!isMultiLine) {
+                        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+                            cleaned = cleaned.slice(1, -1);
+                        } else if (cleaned.startsWith("'") && cleaned.endsWith("'")) {
+                            cleaned = cleaned.slice(1, -1);
+                        }
+                    }
+                    inputElement.value = cleaned;
+                }
+            }));
+        } catch (error) {
+            console.error("Error fixing grammar:", error);
+            alert("Error fixing grammar: " + error.message);
+        } finally {
+            buttonElement.innerHTML = originalContent;
+            buttonElement.disabled = false;
+        }
+    }
+
+    const magicBtn = document.getElementById('magicFixBtn');
+    const magicEditBtn = document.getElementById('magicFixEditBtn');
+    const magicImportBtn = document.getElementById('magicFixImportBtn');
+
+    const taskInput = document.getElementById('taskText');
+    const taskDetailsInput = document.getElementById('taskDetails');
+    const taskEditInput = document.getElementById('editTaskText');
+    const taskEditNotesInput = document.getElementById('editTaskNotes');
+    const taskImportInput = document.getElementById('customDailyTasksInput');
+
+    if (magicBtn && taskInput) {
+        magicBtn.addEventListener('click', () => {
+            // Correct task input, and if details has text, correct that too
+            const targets = [taskInput];
+            if (taskDetailsInput && taskDetailsInput.value.trim()) {
+                targets.push(taskDetailsInput);
+            }
+            runGrammarFix(targets, magicBtn);
+        });
+    }
+    if (magicEditBtn && taskEditInput) {
+        magicEditBtn.addEventListener('click', () => {
+            // Correct edit task input, and if notes has text, correct that too
+            const targets = [taskEditInput];
+            if (taskEditNotesInput && taskEditNotesInput.value.trim()) {
+                targets.push(taskEditNotesInput);
+            }
+            runGrammarFix(targets, magicEditBtn);
+        });
+    }
+    if (magicImportBtn && taskImportInput) {
+        magicImportBtn.addEventListener('click', () => runGrammarFix(taskImportInput, magicImportBtn));
+    }
+})();
+// --- END AI CHAT ASSISTANT LOGIC ---
