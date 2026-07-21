@@ -974,3 +974,20 @@ textarea {
     }
 }
 
+/* Sync Status Dot */
+.sync-status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #888888;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.sync-status-dot.connected {
+    background-color: var(--success) !important;
+}
+.sync-status-dot.error {
+    background-color: var(--danger) !important;
+}
+

@@ -211,8 +211,35 @@ function updateLockBtnUI() {
     }
 }
 
+function updateSyncStatus(status, message) {
+    const dots = document.querySelectorAll('.sync-status-dot');
+    const statusText = document.getElementById('settingsSyncStatusText');
+    
+    let emoji = '⚪';
+    let textColor = 'gray';
+    let label = message || 'Initializing...';
+    
+    if (status === 'connected') {
+        emoji = '🟢';
+        textColor = 'var(--success)';
+    } else if (status === 'error') {
+        emoji = '🔴';
+        textColor = 'var(--danger)';
+    }
+    
+    dots.forEach(dot => {
+        dot.textContent = emoji;
+    });
+    
+    if (statusText) {
+        statusText.innerHTML = `${emoji} ${label}`;
+        statusText.style.color = textColor;
+    }
+}
+
 function loadData() {
     if (useFirebase && dbRef) {
+        updateSyncStatus('checking', 'Connecting to Firebase...');
         // Firebase Instant Sync Listener using compat API
         dbRef.on('value', (snapshot) => {
             const data = snapshot.val();
@@ -248,10 +275,12 @@ function loadData() {
             renderLists();
             renderTasks();
             updateStats();
+            updateSyncStatus('connected', 'Cloud Sync Active');
         }, (error) => {
-            console.error("Firebase database listener failed, falling back to local mode:", error);
-            useFirebase = false;
-            // Run local-only fallback
+            console.error("Firebase database listener error / offline:", error);
+            updateSyncStatus('error', 'Sync Failed: ' + error.message);
+            // We do NOT disable useFirebase here so that Firebase can automatically reconnect
+            // and sync when network is restored. Still run fallback to show cached data.
             checkAndResetDailyTasks();
             applyTheme();
             renderLists();
@@ -259,6 +288,7 @@ function loadData() {
             updateStats();
         });
     } else {
+        updateSyncStatus('error', 'Local-Only Mode (Offline)');
         // Local-only mode fallback
         checkAndResetDailyTasks();
         applyTheme();

@@ -66,7 +66,7 @@
     <div class="header-actions">
         <button id="installAppBtn" class="hidden" style="background: var(--text-color); color: var(--bg-color); font-weight: bold; border-radius: 8px;">⬇ Install App</button>
         <button id="themeBtnHeader">🎨 Themes</button>
-        <button id="settingsBtnHeader">⚙️ Settings</button>
+        <button id="settingsBtnHeader">⚙️ Settings <span class="sync-status-dot">⚪</span></button>
     </div>
 </header>
 
@@ -108,7 +108,7 @@
         <div class="mobile-only" style="display:flex; flex-direction:column; gap:10px; margin-top: 15px;">
             <hr style="border-color: var(--border-color);">
             <button id="themeBtnSidebar">🎨 Themes</button>
-            <button id="settingsBtnSidebar">⚙️ Settings</button>
+            <button id="settingsBtnSidebar">⚙️ Settings <span class="sync-status-dot">⚪</span></button>
         </div>
     </div>
 
@@ -260,7 +260,11 @@
             <h3>⚙️ Settings & API Configuration</h3>
             <button id="closeSettingsModalBtn" style="background:transparent; border:none; font-size:1.5rem; padding:0; box-shadow:none;">✕</button>
         </div>
-        <p style="font-size: 0.9rem; opacity: 0.8; margin-top: 5px;">Configure your API keys. They will be saved securely in your browser's local storage.</p>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; margin-top: 5px;">
+            <span>Cloud Sync Status:</span>
+            <strong id="settingsSyncStatusText" style="color: gray;">⚪ Checking...</strong>
+        </div>
+        <p style="font-size: 0.9rem; opacity: 0.8; margin-top: 8px;">Configure your API keys. They will be saved securely in your browser's local storage.</p>
         
         <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 12px;">
             <div>
