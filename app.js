@@ -999,8 +999,27 @@ if (importFile) {
                 const data = JSON.parse(e.target.result);
                 if (data && Array.isArray(data.tasks)) {
                     state = data;
-                    syncAllTasks(); syncLists(); syncTheme(); applyTheme(); renderLists(); renderTasks();
-                    alert('Data imported successfully!');
+                    
+                    // Save everything to localStorage
+                    try {
+                        localStorage.setItem('cachedTasks', JSON.stringify(state.tasks || []));
+                        localStorage.setItem('cachedLists', JSON.stringify(state.lists || ['Default']));
+                        localStorage.setItem('appCurrentList', state.currentList || 'Default');
+                        localStorage.setItem('appViewMode', state.viewMode || 'active');
+                        localStorage.setItem('appTheme', state.theme || 'light-0');
+                    } catch(e) {
+                        console.error("Failed to save imported state to localStorage:", e);
+                    }
+                    
+                    // Try to sync to Firebase if active
+                    if (useFirebase && dbRef) {
+                        syncAllTasks();
+                        syncLists();
+                        syncTheme();
+                    }
+                    
+                    alert('Data imported successfully! Reloading to apply...');
+                    window.location.reload();
                 }
             } catch(err) {
                 alert('Invalid JSON file.');
