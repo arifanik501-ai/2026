@@ -1716,8 +1716,22 @@ let fetchOpenRouterGlobal = null;
             return details;
         }).join('\n');
 
+        const now = new Date();
+        const currentDateTimeStr = now.toLocaleString('en-US', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric', 
+            hour: 'numeric', 
+            minute: 'numeric', 
+            second: 'numeric',
+            hour12: true
+        });
+
         const systemPrompt = `You are a highly capable, intelligent, and friendly AI Assistant with FULL ACCESS to modify the user's To-Do list website.
  
+Current Real-time Date and Time: ${currentDateTimeStr}
+
 Your task is to help the user manage their tasks, lists, themes, and settings. You can read, add, complete, delete, or edit tasks, create/delete lists, and change themes directly.
 
 Active Tasks:
