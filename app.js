@@ -854,6 +854,71 @@ document.getElementById('addSubtaskBtn').addEventListener('click', () => {
         renderEditSubtasks();
     }
 });
+document.getElementById('aiSuggestSubtasksBtn').addEventListener('click', async () => {
+    const taskText = document.getElementById('editTaskText').value.trim();
+    if (!taskText) {
+        alert('Please enter a task title first.');
+        return;
+    }
+    
+    const btn = document.getElementById('aiSuggestSubtasksBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Suggesting...';
+    btn.disabled = true;
+    
+    try {
+        if (!fetchOpenRouterGlobal) {
+            throw new Error("AI engine is not initialized yet. Please make sure your API key is configured in Settings.");
+        }
+        
+        const response = await fetchOpenRouterGlobal({
+            model: "google/gemma-4-26b-a4b-it:free",
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a task planning assistant. For a given task title, generate 3 to 5 logical subtasks/steps. Each subtask must be on a new line. Do NOT include numbers, bullets, notes, introduction, or explanations. Keep them brief, clear, and actionable."
+                },
+                {
+                    role: "user",
+                    content: taskText
+                }
+            ]
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const textResponse = data.choices[0]?.message?.content?.trim();
+        
+        if (textResponse) {
+            const lines = textResponse.split('\n')
+                .map(line => line.replace(/^[-\*\d\.\s]+/g, '').trim())
+                .filter(line => line.length > 0);
+            
+            if (lines.length > 0) {
+                if (!editingTaskDraft.subtasks) editingTaskDraft.subtasks = [];
+                lines.forEach(item => {
+                    editingTaskDraft.subtasks.push({
+                        id: generateId(),
+                        text: item,
+                        completed: false
+                    });
+                });
+                renderEditSubtasks();
+            } else {
+                alert("AI returned empty suggestions. Please try again.");
+            }
+        }
+    } catch (error) {
+        console.error("Error suggesting subtasks:", error);
+        alert("Error suggesting subtasks: " + error.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
 document.getElementById('saveEditBtn').addEventListener('click', () => {
     if (editingTaskDraft) {
         const taskIdx = state.tasks.findIndex(t => t.id === editingTaskDraft.id);
@@ -1008,6 +1073,92 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
         renderTasks();
     }
 });
+
+const aiOrganizeBtn = document.getElementById('aiOrganizeTasksBtn');
+if (aiOrganizeBtn) {
+    aiOrganizeBtn.addEventListener('click', async () => {
+        const activeTasks = state.tasks.filter(t => t.list === state.currentList && !t.completed && !t.archived);
+        if (activeTasks.length === 0) {
+            alert('No active tasks in this list to organize.');
+            return;
+        }
+        
+        if (!confirm('Are you sure you want the AI to automatically organize, prioritize, and tag the tasks in this list?')) {
+            return;
+        }
+        
+        const originalText = aiOrganizeBtn.innerHTML;
+        aiOrganizeBtn.innerHTML = '⏳ Organizing...';
+        aiOrganizeBtn.disabled = true;
+        
+        try {
+            if (!fetchOpenRouterGlobal) {
+                throw new Error("AI engine is not initialized yet. Please configure your API key in Settings.");
+            }
+            
+            // Format tasks to send to AI
+            const tasksPayload = activeTasks.map(t => ({
+                id: t.id,
+                title: t.text,
+                category: t.category || '',
+                priority: t.priority
+            }));
+            
+            const response = await fetchOpenRouterGlobal({
+                model: "google/gemma-4-26b-a4b-it:free",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are an expert organizer. Analyze the user's task list and logically group them by updating their 'priority' (High, Medium, or Low) and 'category' (a simple 1-2 word tag like 'Work', 'Home', 'Health', 'Finance', 'Study', 'Personal') based on their title and context. Return ONLY a valid JSON array of objects, where each object contains 'id', 'priority', and 'category'. Do NOT include any markdown code block (like ```json), introduction, comments, notes, or explanations."
+                    },
+                    {
+                        role: "user",
+                        content: JSON.stringify(tasksPayload)
+                    }
+                ]
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            let textResponse = data.choices[0]?.message?.content?.trim();
+            
+            if (textResponse) {
+                // Clean up any markdown code block wrap if it exists
+                textResponse = textResponse.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+                
+                const organizedList = JSON.parse(textResponse);
+                if (Array.isArray(organizedList)) {
+                    organizedList.forEach(item => {
+                        const task = state.tasks.find(t => t.id === item.id);
+                        if (task) {
+                            if (['High', 'Medium', 'Low'].includes(item.priority)) {
+                                task.priority = item.priority;
+                            }
+                            if (item.category) {
+                                task.category = item.category.trim();
+                            }
+                            syncTask(task);
+                        }
+                    });
+                    
+                    renderTasks();
+                    alert('Tasks successfully organized by AI!');
+                } else {
+                    throw new Error("AI did not return a valid list format.");
+                }
+            }
+        } catch (error) {
+            console.error("Error organizing tasks:", error);
+            alert("Error organizing tasks: " + error.message);
+        } finally {
+            aiOrganizeBtn.innerHTML = originalText;
+            aiOrganizeBtn.disabled = false;
+        }
+    });
+}
 
 // Import/Export
 const exportBtn = document.getElementById('exportBtn');
@@ -1300,6 +1451,9 @@ window.addEventListener('appinstalled', (evt) => {
 });
 // --- END PWA LOGIC ---
 
+// --- GLOBAL AI HELPER ---
+let fetchOpenRouterGlobal = null;
+
 // --- AI CHAT ASSISTANT LOGIC ---
 (function() {
     const aiBubble = document.getElementById('aiChatBubble');
@@ -1348,6 +1502,7 @@ window.addEventListener('appinstalled', (evt) => {
         }
         return response;
     }
+    fetchOpenRouterGlobal = fetchOpenRouter;
 
     // Toggle panel
     if (aiBubble && aiPanel) {
@@ -1405,6 +1560,138 @@ window.addEventListener('appinstalled', (evt) => {
     }
 
     // Send chat logic
+    function executeAiCommand(cmd) {
+        console.log("Executing AI command:", cmd);
+        try {
+            switch (cmd.action) {
+                case 'addTask': {
+                    if (!cmd.text) return;
+                    const newTask = {
+                        id: generateId(),
+                        list: state.currentList,
+                        text: cmd.text,
+                        priority: cmd.priority || 'Medium',
+                        category: cmd.category || '',
+                        dueDate: cmd.dueDate || '',
+                        reminderDate: '',
+                        reminderNotified: false,
+                        recurring: cmd.recurring || 'None',
+                        isDaily: cmd.isDaily || (state.viewMode === 'daily'),
+                        lastResetDate: getTodayDateString(),
+                        completed: false,
+                        archived: false,
+                        notes: cmd.notes || '',
+                        subtasks: [],
+                        order: state.tasks.filter(t => t.list === state.currentList).length
+                    };
+                    state.tasks.push(newTask);
+                    syncTask(newTask);
+                    renderTasks();
+                    break;
+                }
+                case 'completeTask': {
+                    const task = state.tasks.find(t => t.id === cmd.taskId || t.text.toLowerCase().includes(cmd.taskId.toLowerCase()));
+                    if (task) {
+                        task.completed = true;
+                        if (task.recurring !== 'None') {
+                            handleRecurring(task);
+                        }
+                        syncTask(task);
+                        renderTasks();
+                    }
+                    break;
+                }
+                case 'uncompleteTask': {
+                    const task = state.tasks.find(t => t.id === cmd.taskId || t.text.toLowerCase().includes(cmd.taskId.toLowerCase()));
+                    if (task) {
+                        task.completed = false;
+                        syncTask(task);
+                        renderTasks();
+                    }
+                    break;
+                }
+                case 'deleteTask': {
+                    const taskIdx = state.tasks.findIndex(t => t.id === cmd.taskId || t.text.toLowerCase().includes(cmd.taskId.toLowerCase()));
+                    if (taskIdx > -1) {
+                        const task = state.tasks[taskIdx];
+                        state.tasks.splice(taskIdx, 1);
+                        syncDeleteTask(task.id);
+                        renderTasks();
+                    }
+                    break;
+                }
+                case 'addList': {
+                    if (cmd.listName && !state.lists.includes(cmd.listName)) {
+                        state.lists.push(cmd.listName);
+                        state.currentList = cmd.listName;
+                        localStorage.setItem('appCurrentList', cmd.listName);
+                        syncLists();
+                        renderLists();
+                        renderTasks();
+                    }
+                    break;
+                }
+                case 'deleteList': {
+                    const listName = cmd.listName;
+                    if (listName && state.lists.includes(listName)) {
+                        state.lists = state.lists.filter(l => l !== listName);
+                        const deletedTasks = state.tasks.filter(t => t.list === listName);
+                        state.tasks = state.tasks.filter(t => t.list !== listName);
+                        state.currentList = 'Default';
+                        localStorage.setItem('appCurrentList', 'Default');
+                        syncLists();
+                        deletedTasks.forEach(t => syncDeleteTask(t.id));
+                        renderLists();
+                        renderTasks();
+                    }
+                    break;
+                }
+                case 'changeTheme': {
+                    if (cmd.themeId) {
+                        state.theme = cmd.themeId;
+                        localStorage.setItem('appTheme', cmd.themeId);
+                        applyTheme();
+                        syncTheme();
+                        if (typeof renderColorPalette === 'function') renderColorPalette();
+                    }
+                    break;
+                }
+                case 'clearCompleted': {
+                    const toDelete = state.tasks.filter(t => t.list === state.currentList && t.archived === (state.viewMode === 'archived') && t.completed);
+                    state.tasks = state.tasks.filter(t => !toDelete.includes(t));
+                    toDelete.forEach(t => syncDeleteTask(t.id));
+                    renderTasks();
+                    break;
+                }
+                case 'clearAll': {
+                    const toDelete = state.tasks.filter(t => t.list === state.currentList);
+                    state.tasks = state.tasks.filter(t => !toDelete.includes(t));
+                    toDelete.forEach(t => syncDeleteTask(t.id));
+                    renderTasks();
+                    break;
+                }
+                case 'fixAllSpelling': {
+                    if (Array.isArray(cmd.tasks)) {
+                        cmd.tasks.forEach(item => {
+                            const task = state.tasks.find(t => t.id === item.id);
+                            if (task && item.correctedText) {
+                                task.text = item.correctedText.trim();
+                                syncTask(task);
+                            }
+                        });
+                        renderTasks();
+                    }
+                    break;
+                }
+                default:
+                    console.warn("Unknown AI command:", cmd.action);
+            }
+        } catch (e) {
+            console.error("Error executing AI command:", e);
+        }
+    }
+
+    // Send chat logic
     async function handleSend() {
         const userMsg = chatInput.value.trim();
         if (!userMsg) return;
@@ -1423,18 +1710,118 @@ window.addEventListener('appinstalled', (evt) => {
         // Compile tasks context
         const activeTasks = state.tasks.filter(t => !t.completed && !t.archived);
         const taskContext = activeTasks.map(t => {
-            let details = `- [${t.priority} Priority] "${t.text}"`;
+            let details = `- [ID: ${t.id}] [${t.priority} Priority] "${t.text}"`;
             if (t.dueDate) details += ` (Due: ${t.dueDate})`;
             if (t.isDaily) details += ` [Daily Task]`;
             return details;
         }).join('\n');
 
-        const systemPrompt = `You are a highly capable, intelligent, and friendly AI Assistant. You can answer any questions, write content, write code, solve problems, or chat about anything the user wants.
+        const systemPrompt = `You are a highly capable, intelligent, and friendly AI Assistant with FULL ACCESS to modify the user's To-Do list website.
+ 
+Your task is to help the user manage their tasks, lists, themes, and settings. You can read, add, complete, delete, or edit tasks, create/delete lists, and change themes directly.
 
-For context, the user is also viewing their daily To-Do List. If their query is related to their tasks, projects, or schedule, you can refer to their current active tasks:
+Active Tasks:
 ${taskContext || "No active tasks in current list."}
 
-Always feel free to answer any prompt or request directly, regardless of whether it is about tasks or not. Keep your responses engaging, helpful, and formatted nicely.`;
+Available Lists: ${state.lists.join(', ')}
+Current Active List: ${state.currentList}
+Current Theme: ${state.theme}
+Current View Mode: ${state.viewMode}
+
+If the user asks you to perform an action on the website, you MUST output a JSON command block at the very end of your response wrapped in <command>...</command> tags.
+Supported actions and their JSON parameters:
+
+1. Add a Task:
+<command>
+{
+  "action": "addTask",
+  "text": "Task text",
+  "priority": "Low" | "Medium" | "High",
+  "category": "Category name",
+  "dueDate": "YYYY-MM-DDTHH:MM",
+  "notes": "Task details/notes (Markdown supported)",
+  "recurring": "None" | "Daily" | "Weekly"
+}
+</command>
+
+2. Complete a Task:
+<command>
+{
+  "action": "completeTask",
+  "taskId": "Task ID or exact task text"
+}
+</command>
+
+3. Uncomplete a Task (mark as pending):
+<command>
+{
+  "action": "uncompleteTask",
+  "taskId": "Task ID or exact task text"
+}
+</command>
+
+4. Delete a Task:
+<command>
+{
+  "action": "deleteTask",
+  "taskId": "Task ID or exact task text"
+}
+</command>
+
+5. Add a List/Project:
+<command>
+{
+  "action": "addList",
+  "listName": "List Name"
+}
+</command>
+
+6. Delete a List/Project:
+<command>
+{
+  "action": "deleteList",
+  "listName": "List Name"
+}
+</command>
+
+7. Change Theme:
+<command>
+{
+  "action": "changeTheme",
+  "themeId": "dark" | "light-0" | "light-1" | ... | "light-19"
+}
+</command>
+
+8. Clear Completed Tasks (in current view):
+<command>
+{
+  "action": "clearCompleted"
+}
+</command>
+
+9. Clear All Tasks (in current list):
+<command>
+{
+  "action": "clearAll"
+}
+</command>
+
+10. Fix Spelling/Grammar for All Tasks:
+If the user asks you to fix spelling, grammar, or typos for their tasks, you must output:
+<command>
+{
+  "action": "fixAllSpelling",
+  "tasks": [
+    {
+      "id": "Task ID",
+      "correctedText": "Spelling and grammar corrected task text"
+    },
+    ...
+  ]
+}
+</command>
+
+Only output ONE command block per turn if needed. Be helpful, state what action you are taking, and include the command block.`;
 
         try {
             const response = await fetchOpenRouter({
@@ -1477,8 +1864,9 @@ Always feel free to answer any prompt or request directly, regardless of whether
                             if (token) {
                                 aiResponseBuffer += token;
                                 
-                                // Update message text inline
-                                let parsedText = escapeHtml(aiResponseBuffer);
+                                // Update message text inline (hiding the raw JSON command block from UI)
+                                let displayText = aiResponseBuffer.replace(/<command>[\s\S]*?(<\/command>|$)/g, '').trim();
+                                let parsedText = escapeHtml(displayText);
                                 parsedText = parsedText.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
                                 parsedText = parsedText.replace(/\n/g, '<br>');
                                 aiMessageDiv.innerHTML = parsedText;
@@ -1488,6 +1876,18 @@ Always feel free to answer any prompt or request directly, regardless of whether
                             // Suppress json parsing noise during chunk segments
                         }
                     }
+                }
+            }
+
+            // After streaming completes, search for and execute <command> tags
+            const commandRegex = /<command>([\s\S]*?)<\/command>/;
+            const match = aiResponseBuffer.match(commandRegex);
+            if (match && match[1]) {
+                try {
+                    const cmd = JSON.parse(match[1].trim());
+                    executeAiCommand(cmd);
+                } catch (e) {
+                    console.error("Failed to parse command JSON:", e);
                 }
             }
 
