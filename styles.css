@@ -45,7 +45,6 @@
     font-family: 'Inter', sans-serif;
     margin: 0;
     padding: 0;
-    transition: none !important;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -531,18 +530,34 @@ textarea {
         position: relative;
     }
     
+    /* Header mobile adjustments */
+    header {
+        padding: 10px 15px;
+    }
+    header h1 {
+        font-size: 1.4rem !important;
+    }
+    
+    .header-actions {
+        display: none !important;
+    }
+    
+    /* Sidebar slide configuration */
     .sidebar {
         position: fixed;
         top: 0;
-        left: -320px; /* Off-canvas */
+        left: -300px; /* Off-canvas */
         width: 280px;
-        height: 100vh;
-        z-index: 1000;
+        height: 100dvh;
+        z-index: 1001;
         background-color: var(--bg-color);
-        transition: none !important; /* Super smooth slide */
         border-right: 1px solid var(--border-color);
         border-bottom: none;
-        box-shadow: 4px 0 15px rgba(0,0,0,0.2);
+        box-shadow: 4px 0 15px rgba(0,0,0,0.15);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important; /* Smooth transition */
     }
     
     .sidebar.open {
@@ -551,130 +566,197 @@ textarea {
     
     .main {
         width: 100%;
-        padding: 15px 10px;
-    }
-
-    .header-actions {
-        display: none !important;
+        padding: 15px 12px;
     }
     
-    /* Compact Task Form */
+    /* Elegant and Clean Task Form on Mobile */
     .task-form {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 10px;
-        padding: 12px;
-    }
-    
-    #taskText, #taskDetails, #addTaskBtn {
-        grid-column: 1 / -1;
-    }
-    
-    .due-date-wrapper {
         display: flex;
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 5px !important;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 16px;
+    }
+    
+    .task-form > div:first-child {
         width: 100%;
-    }
-    
-    .due-input-container {
-        width: 100% !important;
-        display: flex !important;
-        justify-content: space-between !important;
-    }
-
-    .due-input-container input[type="datetime-local"] {
-        width: auto !important;
-        flex: 1 !important;
-    }
-    
-    .reminder-wrapper {
         display: flex;
-        flex-direction: row !important;
-        align-items: center !important;
-        flex-wrap: wrap !important;
-        gap: 5px !important;
+        gap: 8px;
     }
     
     .task-form input:not([type="number"]), 
     .task-form textarea, 
     .task-form select {
         width: 100% !important;
+        box-sizing: border-box;
+    }
+    
+    /* Group form selectors for compact look */
+    .task-form select,
+    .task-form input[type="text"]#taskCategory {
+        height: 42px;
+    }
+    
+    .due-date-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        width: 100%;
+    }
+    
+    .due-input-container {
+        width: 100% !important;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 6px 4px 12px;
+    }
+    
+    .due-input-container input[type="datetime-local"] {
+        flex: 1;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        font-size: 0.95rem;
+    }
+    
+    .reminder-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        background-color: var(--btn-bg);
+        border: 1px solid var(--border-color);
+        padding: 8px 12px;
+        border-radius: 8px;
+        box-sizing: border-box;
     }
     
     .reminder-wrapper input[type="number"] {
-        width: 85px !important;
-        padding-left: 8px !important;
-        padding-right: 8px !important;
+        width: 60px !important;
+        padding: 6px;
+        text-align: center;
+        border-radius: 6px;
     }
     
-    /* Better Task Items */
+    /* Beautiful and clean controls grid on mobile */
+    .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+    
+    #searchInput {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+    
+    #filterPriority {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+    
+    #sortOptions {
+        grid-column: 1 / 2;
+        width: 100%;
+    }
+    
+    #sortOrder {
+        grid-column: 2 / 3;
+        width: 100%;
+    }
+    
+    /* Beautiful Task Items on Mobile */
     .task-item {
-        padding: 12px;
+        padding: 16px;
+        gap: 8px;
+        border-radius: 16px;
     }
     
     .task-header {
         flex-direction: column;
-        align-items: stretch;
+        align-items: flex-start;
+        gap: 8px;
     }
     
     .task-title-row {
-        flex: 1 1 auto;
         align-items: flex-start;
+        gap: 10px;
     }
     
     .task-checkbox {
-        margin-top: 5px;
-        transform: scale(1.3) !important;
+        margin-top: 4px;
+        transform: scale(1.25) !important;
     }
     
     .task-text {
-        width: 100%;
-        margin-bottom: 5px;
-        font-size: 1.1em;
+        font-size: 1.05rem;
         line-height: 1.4;
     }
     
     .task-actions {
         display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-        margin-top: 5px;
+        width: 100%;
+        gap: 8px;
+        margin-top: 4px;
+        border-top: 1px solid var(--border-color);
+        padding-top: 8px;
     }
     
     .task-actions button {
-        flex: 1 1 30%;
-        padding: 8px;
-        font-size: 0.85em;
+        flex: 1;
+        padding: 8px 4px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-align: center;
+        border-radius: 6px;
     }
     
     .task-meta {
-        flex-direction: row;
-        flex-wrap: wrap;
         gap: 8px;
-        margin-top: 8px;
+        margin-top: 4px;
+        font-size: 0.8rem;
     }
     
-    /* Horizontal Views at bottom of sidebar */
-    .sidebar > div:last-child > div {
-        flex-direction: row !important;
-        flex-wrap: wrap;
+    /* Mobile views and list options alignment */
+    .sidebar > div {
+        margin-bottom: 10px;
     }
     
-    .sidebar > div:last-child button {
-        flex: 1 1 30%;
+    .sidebar h3 {
+        font-size: 1rem;
+        opacity: 0.8;
     }
     
-    /* Modal fixes */
+    .sidebar button, 
+    .sidebar .list-item {
+        padding: 10px 12px;
+        font-size: 0.92rem;
+    }
+    
+    /* Clean bottom buttons in sidebar */
+    .sidebar > div:last-child {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: auto;
+    }
+    
+    /* Modal content fits screen perfectly */
     .modal-content {
-        width: 95%;
-        margin: 10% auto;
+        width: 92%;
+        max-width: 420px;
         padding: 20px;
+        border-radius: 20px;
+        gap: 12px;
     }
+    
     .modal-row {
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
     }
 }
 

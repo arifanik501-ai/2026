@@ -275,6 +275,16 @@
                 <label for="settingsFirebaseConfig" style="font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 5px;">Firebase Config JSON:</label>
                 <textarea id="settingsFirebaseConfig" placeholder='Paste your Firebase config JSON here, e.g.:&#10;{&#10;  "apiKey": "...",&#10;  "databaseURL": "...",&#10;  ...&#10;}' style="width: 100%; height: 120px; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--task-bg); color: var(--text-color); font-family: monospace; font-size: 0.85rem; line-height: 1.4;"></textarea>
             </div>
+            
+            <hr style="border-color: var(--border-color); margin: 5px 0;">
+            
+            <h4 style="margin: 0;">Backup & Restore Data</h4>
+            <p style="font-size: 0.82rem; opacity: 0.7;">Export your tasks from local storage and import them here to restore your data.</p>
+            <div style="display: flex; gap: 10px;">
+                <button id="exportBtn" class="primary-btn" style="flex: 1; font-size: 0.88rem; padding: 10px; border-radius: 8px;">📤 Export Backup</button>
+                <button id="importBtn" style="flex: 1; font-size: 0.88rem; padding: 10px; border-radius: 8px;">📥 Import Backup</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;">
+            </div>
         </div>
         
         <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
