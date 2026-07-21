@@ -1,4 +1,13 @@
-const defaultFirebaseConfig = null;
+const defaultFirebaseConfig = {
+  apiKey: "AIzaSyBcjbR7Qu7M-RnHUtLJ9zeehILqQHYLw4E",
+  authDomain: "whatsapp-c10ef.firebaseapp.com",
+  databaseURL: "https://whatsapp-c10ef-default-rtdb.firebaseio.com",
+  projectId: "whatsapp-c10ef",
+  storageBucket: "whatsapp-c10ef.firebasestorage.app",
+  messagingSenderId: "675053106773",
+  appId: "1:675053106773:web:b7078468691a07ecfec6dc",
+  measurementId: "G-89Z8WBJ3R0"
+};
 
 let firebaseConfig = defaultFirebaseConfig;
 const savedFirebaseConfigStr = localStorage.getItem('firebaseConfig');
