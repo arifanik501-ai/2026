@@ -330,7 +330,10 @@
 <div id="aiChatPanel" class="ai-chat-panel hidden">
     <div class="ai-chat-header">
         <h3>✨ AI Task Assistant</h3>
-        <button id="closeAiChatBtn" style="background:transparent; border:none; font-size:1.3rem; padding:0; box-shadow:none;">✕</button>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button id="clearAiChatBtn" title="Clear Chat History" style="background:transparent; border:none; font-size:1.1rem; padding:0; cursor:pointer; box-shadow:none; opacity:0.7; transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">🗑️</button>
+            <button id="closeAiChatBtn" style="background:transparent; border:none; font-size:1.3rem; padding:0; cursor:pointer; box-shadow:none; opacity:0.7; transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">✕</button>
+        </div>
     </div>
 
     <div id="aiChatBody" class="ai-chat-body">

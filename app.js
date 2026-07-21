@@ -1462,11 +1462,44 @@ let fetchOpenRouterGlobal = null;
     const sendBtn = document.getElementById('sendAiChatBtn');
     const chatInput = document.getElementById('aiChatInput');
     const chatBody = document.getElementById('aiChatBody');
+    const clearChatBtn = document.getElementById('clearAiChatBtn');
 
     // Specify your OpenRouter API Keys directly here
     const savedOpenRouterKey = localStorage.getItem('openRouterKey');
     const openRouterKeys = savedOpenRouterKey ? [savedOpenRouterKey] : [];
     let currentKeyIndex = 0;
+
+    let chatHistory = [];
+    try {
+        chatHistory = JSON.parse(localStorage.getItem('aiChatHistory') || '[]');
+    } catch (e) {
+        console.error("Failed to load AI chat history:", e);
+    }
+
+    function renderChatHistory() {
+        chatBody.innerHTML = `
+            <div class="ai-chat-message ai">
+                Hello! I am your AI Task Assistant. I can see all your active tasks. Ask me to break them down, summarize your progress, or help you plan!
+            </div>
+        `;
+        chatHistory.forEach(msg => {
+            appendMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
+        });
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    // Render history immediately on load
+    renderChatHistory();
+
+    if (clearChatBtn) {
+        clearChatBtn.addEventListener('click', () => {
+            if (confirm("Are you sure you want to clear your chat history?")) {
+                chatHistory = [];
+                localStorage.removeItem('aiChatHistory');
+                renderChatHistory();
+            }
+        });
+    }
 
     async function fetchOpenRouter(payload) {
         if (!openRouterKeys[currentKeyIndex]) {
@@ -1528,7 +1561,14 @@ let fetchOpenRouterGlobal = null;
         
         // Simple markdown links support
         let parsedText = escapeHtml(text);
-        parsedText = parsedText.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+        parsedText = parsedText.replace(/\[(.*?)\]\((.*?)\)/g, (match, linkText, url) => {
+            const cleanUrl = url.trim();
+            // Prevent javascript: URLs or other dangerous protocols
+            if (/^(javascript|data|vbscript):/i.test(cleanUrl)) {
+                return escapeHtml(match);
+            }
+            return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+        });
         parsedText = parsedText.replace(/\n/g, '<br>');
         
         msgDiv.innerHTML = parsedText;
@@ -1705,6 +1745,10 @@ let fetchOpenRouterGlobal = null;
         appendMessage('user', userMsg);
         chatInput.value = '';
 
+        // Add user message to history
+        chatHistory.push({ role: 'user', content: userMsg });
+        localStorage.setItem('aiChatHistory', JSON.stringify(chatHistory));
+
         showTypingIndicator();
 
         // Compile tasks context
@@ -1838,11 +1882,12 @@ If the user asks you to fix spelling, grammar, or typos for their tasks, you mus
 Only output ONE command block per turn if needed. Be helpful, state what action you are taking, and include the command block.`;
 
         try {
+            const historyForApi = chatHistory.slice(-20); // Keep context lightweight (last 20 messages)
             const response = await fetchOpenRouter({
                 model: "google/gemma-4-26b-a4b-it:free",
                 messages: [
                     { role: "system", content: systemPrompt },
-                    { role: "user", content: userMsg }
+                    ...historyForApi
                 ],
                 stream: true
             });
@@ -1881,7 +1926,13 @@ Only output ONE command block per turn if needed. Be helpful, state what action 
                                 // Update message text inline (hiding the raw JSON command block from UI)
                                 let displayText = aiResponseBuffer.replace(/<command>[\s\S]*?(<\/command>|$)/g, '').trim();
                                 let parsedText = escapeHtml(displayText);
-                                parsedText = parsedText.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+                                parsedText = parsedText.replace(/\[(.*?)\]\((.*?)\)/g, (match, linkText, url) => {
+                                    const cleanUrl = url.trim();
+                                    if (/^(javascript|data|vbscript):/i.test(cleanUrl)) {
+                                        return escapeHtml(match);
+                                    }
+                                    return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+                                });
                                 parsedText = parsedText.replace(/\n/g, '<br>');
                                 aiMessageDiv.innerHTML = parsedText;
                                 chatBody.scrollTop = chatBody.scrollHeight;
@@ -1903,6 +1954,13 @@ Only output ONE command block per turn if needed. Be helpful, state what action 
                 } catch (e) {
                     console.error("Failed to parse command JSON:", e);
                 }
+            }
+
+            // Save the clean AI response to chat history
+            let finalDisplayText = aiResponseBuffer.replace(/<command>[\s\S]*?(<\/command>|$)/g, '').trim();
+            if (finalDisplayText) {
+                chatHistory.push({ role: 'assistant', content: finalDisplayText });
+                localStorage.setItem('aiChatHistory', JSON.stringify(chatHistory));
             }
 
         } catch (error) {
