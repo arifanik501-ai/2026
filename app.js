@@ -1624,3 +1624,20 @@ Always feel free to answer any prompt or request directly, regardless of whether
     }
 })();
 // --- END SETTINGS LOGIC ---
+
+// --- WAKEUP / REALTIME SYNC LOGIC ---
+// Re-establish Firebase connection instantly when browser tab is focused or device wakes up
+(function() {
+    function reconnectFirebase() {
+        if (useFirebase && db) {
+            console.log("Re-establishing active Firebase connection...");
+            db.goOnline();
+        }
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            reconnectFirebase();
+        }
+    });
+    window.addEventListener('focus', reconnectFirebase);
+})();
