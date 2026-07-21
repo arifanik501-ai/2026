@@ -1013,13 +1013,29 @@ if (importFile) {
                     
                     // Try to sync to Firebase if active
                     if (useFirebase && dbRef) {
-                        syncAllTasks();
-                        syncLists();
-                        syncTheme();
+                        let updates = {};
+                        (state.tasks || []).forEach(t => { if (t && t.id) updates[t.id] = t; });
+                        
+                        const promises = [
+                            dbRef.child('tasks').set(updates),
+                            dbRef.child('lists').set(state.lists || ['Default']),
+                            dbRef.child('theme').set(state.theme || 'light-0')
+                        ];
+                        
+                        Promise.all(promises)
+                            .then(() => {
+                                alert('Data imported and synced to Firebase successfully! Reloading to apply...');
+                                window.location.reload();
+                            })
+                            .catch(err => {
+                                console.error("Firebase sync failed during import:", err);
+                                alert('Data imported locally, but Firebase sync failed: ' + err.message + '. Reloading to apply...');
+                                window.location.reload();
+                            });
+                    } else {
+                        alert('Data imported locally successfully! Reloading to apply...');
+                        window.location.reload();
                     }
-                    
-                    alert('Data imported successfully! Reloading to apply...');
-                    window.location.reload();
                 }
             } catch(err) {
                 alert('Invalid JSON file.');
