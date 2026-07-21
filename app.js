@@ -1,17 +1,31 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyBcjbR7Qu7M-RnHUtLJ9zeehILqQHYLw4E",
-  authDomain: "whatsapp-c10ef.firebaseapp.com",
-  databaseURL: "https://whatsapp-c10ef-default-rtdb.firebaseio.com",
-  projectId: "whatsapp-c10ef",
-  storageBucket: "whatsapp-c10ef.firebasestorage.app",
-  messagingSenderId: "675053106773",
-  appId: "1:675053106773:web:b7078468691a07ecfec6dc",
-  measurementId: "G-89Z8WBJ3R0"
-};
+const defaultFirebaseConfig = null;
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const dbRef = db.ref('todo_app_data');
+let firebaseConfig = defaultFirebaseConfig;
+const savedFirebaseConfigStr = localStorage.getItem('firebaseConfig');
+if (savedFirebaseConfigStr) {
+    try {
+        firebaseConfig = JSON.parse(savedFirebaseConfigStr);
+    } catch (e) {
+        console.error("Failed to parse saved Firebase config:", e);
+    }
+}
+
+let db = null;
+let dbRef = null;
+let useFirebase = false;
+
+if (typeof firebase !== 'undefined' && firebaseConfig && firebaseConfig.apiKey) {
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        dbRef = db.ref('todo_app_data');
+        useFirebase = true;
+    } catch (e) {
+        console.error("Firebase initialization failed, falling back to local mode:", e);
+    }
+} else {
+    console.warn("Firebase SDK not loaded or config missing, running in local-only mode.");
+}
 
 // Application State
 const savedTheme = localStorage.getItem('appTheme') || 'light-0';
@@ -198,68 +212,106 @@ function updateLockBtnUI() {
 }
 
 function loadData() {
-    // Firebase Instant Sync Listener using compat API
-    dbRef.on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            if (Array.isArray(data.tasks)) {
-                state.tasks = data.tasks.filter(t => t !== null);
-            } else if (typeof data.tasks === 'object' && data.tasks !== null) {
-                state.tasks = Object.values(data.tasks).filter(t => t !== null);
-            } else {
-                state.tasks = [];
+    if (useFirebase && dbRef) {
+        // Firebase Instant Sync Listener using compat API
+        dbRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                if (Array.isArray(data.tasks)) {
+                    state.tasks = data.tasks.filter(t => t !== null);
+                } else if (typeof data.tasks === 'object' && data.tasks !== null) {
+                    state.tasks = Object.values(data.tasks).filter(t => t !== null);
+                } else {
+                    state.tasks = [];
+                }
+                
+                if (Array.isArray(data.lists)) {
+                    state.lists = data.lists.filter(l => l !== null);
+                } else if (typeof data.lists === 'object' && data.lists !== null) {
+                    state.lists = Object.values(data.lists).filter(l => l !== null);
+                } else {
+                    state.lists = ['Default'];
+                }
+                if (data.theme) {
+                    state.theme = data.theme;
+                    localStorage.setItem('appTheme', data.theme);
+                }
             }
-            
-            if (Array.isArray(data.lists)) {
-                state.lists = data.lists.filter(l => l !== null);
-            } else if (typeof data.lists === 'object' && data.lists !== null) {
-                state.lists = Object.values(data.lists).filter(l => l !== null);
-            } else {
-                state.lists = ['Default'];
-            }
-            if (data.theme) {
-                state.theme = data.theme;
-                localStorage.setItem('appTheme', data.theme);
-            }
-        }
-        try {
-            localStorage.setItem('cachedTasks', JSON.stringify(state.tasks));
-            localStorage.setItem('cachedLists', JSON.stringify(state.lists));
-        } catch(e) {}
+            try {
+                localStorage.setItem('cachedTasks', JSON.stringify(state.tasks));
+                localStorage.setItem('cachedLists', JSON.stringify(state.lists));
+            } catch(e) {}
 
-        // Force UI updates when cloud data arrives
+            // Force UI updates when cloud data arrives
+            checkAndResetDailyTasks();
+            applyTheme();
+            renderLists();
+            renderTasks();
+            updateStats();
+        }, (error) => {
+            console.error("Firebase database listener failed, falling back to local mode:", error);
+            useFirebase = false;
+            // Run local-only fallback
+            checkAndResetDailyTasks();
+            applyTheme();
+            renderLists();
+            renderTasks();
+            updateStats();
+        });
+    } else {
+        // Local-only mode fallback
         checkAndResetDailyTasks();
         applyTheme();
         renderLists();
         renderTasks();
         updateStats();
-    });
+    }
 }
 
 function syncTask(task) {
-    dbRef.child('tasks').child(task.id).set(task);
+    if (useFirebase && dbRef) {
+        dbRef.child('tasks').child(task.id).set(task).catch(e => {
+            console.error("Firebase syncTask failed:", e);
+        });
+    }
     try { localStorage.setItem('cachedTasks', JSON.stringify(state.tasks)); } catch(e) {}
 }
 
 function syncDeleteTask(taskId) {
-    dbRef.child('tasks').child(taskId).remove();
+    if (useFirebase && dbRef) {
+        dbRef.child('tasks').child(taskId).remove().catch(e => {
+            console.error("Firebase syncDeleteTask failed:", e);
+        });
+    }
     try { localStorage.setItem('cachedTasks', JSON.stringify(state.tasks)); } catch(e) {}
 }
 
 function syncAllTasks() {
-    let updates = {};
-    state.tasks.forEach(t => { updates[t.id] = t; });
-    dbRef.child('tasks').set(updates);
+    if (useFirebase && dbRef) {
+        let updates = {};
+        state.tasks.forEach(t => { updates[t.id] = t; });
+        dbRef.child('tasks').set(updates).catch(e => {
+            console.error("Firebase syncAllTasks failed:", e);
+        });
+    }
     try { localStorage.setItem('cachedTasks', JSON.stringify(state.tasks)); } catch(e) {}
 }
 
 function syncLists() {
-    dbRef.child('lists').set(state.lists);
+    if (useFirebase && dbRef) {
+        dbRef.child('lists').set(state.lists).catch(e => {
+            console.error("Firebase syncLists failed:", e);
+        });
+    }
     try { localStorage.setItem('cachedLists', JSON.stringify(state.lists)); } catch(e) {}
 }
 
 function syncTheme() {
-    dbRef.child('theme').set(state.theme);
+    if (useFirebase && dbRef) {
+        dbRef.child('theme').set(state.theme).catch(e => {
+            console.error("Firebase syncTheme failed:", e);
+        });
+    }
 }
 
 function generateId() {
@@ -1184,10 +1236,8 @@ window.addEventListener('appinstalled', (evt) => {
     const chatBody = document.getElementById('aiChatBody');
 
     // Specify your OpenRouter API Keys directly here
-    const openRouterKeys = [
-        "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",
-        "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"
-    ];
+    const savedOpenRouterKey = localStorage.getItem('openRouterKey');
+    const openRouterKeys = savedOpenRouterKey ? [savedOpenRouterKey] : [];
     let currentKeyIndex = 0;
 
     async function fetchOpenRouter(payload) {
@@ -1286,7 +1336,7 @@ window.addEventListener('appinstalled', (evt) => {
         if (!userMsg) return;
 
         if (!openRouterKeys[currentKeyIndex]) {
-            alert('OpenRouter API Keys are missing. Please configure them in app.js.');
+            alert('OpenRouter API Key is missing. Please configure it in Settings (⚙️).');
             return;
         }
 
@@ -1476,3 +1526,82 @@ Always feel free to answer any prompt or request directly, regardless of whether
     }
 })();
 // --- END AI CHAT ASSISTANT LOGIC ---
+
+// --- SETTINGS LOGIC ---
+(function() {
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsBtnHeader = document.getElementById('settingsBtnHeader');
+    const settingsBtnSidebar = document.getElementById('settingsBtnSidebar');
+    const closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn');
+    const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    
+    const settingsOpenRouterKey = document.getElementById('settingsOpenRouterKey');
+    const settingsFirebaseConfig = document.getElementById('settingsFirebaseConfig');
+
+    function openSettingsModal() {
+        if (!settingsModal) return;
+        
+        // Load values from localStorage
+        const savedOpenRouterKey = localStorage.getItem('openRouterKey') || '';
+        const savedFirebaseConfig = localStorage.getItem('firebaseConfig') || '';
+        
+        if (settingsOpenRouterKey) settingsOpenRouterKey.value = savedOpenRouterKey;
+        if (settingsFirebaseConfig) settingsFirebaseConfig.value = savedFirebaseConfig;
+        
+        settingsModal.classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+        if (settingsModal) settingsModal.classList.add('hidden');
+    }
+
+    if (settingsBtnHeader) {
+        settingsBtnHeader.addEventListener('click', openSettingsModal);
+    }
+    if (settingsBtnSidebar) {
+        settingsBtnSidebar.addEventListener('click', () => {
+            openSettingsModal();
+            toggleSidebar(true);
+        });
+    }
+    if (closeSettingsModalBtn) {
+        closeSettingsModalBtn.addEventListener('click', closeSettingsModal);
+    }
+    if (cancelSettingsBtn) {
+        cancelSettingsBtn.addEventListener('click', closeSettingsModal);
+    }
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', () => {
+            const orKey = settingsOpenRouterKey ? settingsOpenRouterKey.value.trim() : '';
+            const fbConfig = settingsFirebaseConfig ? settingsFirebaseConfig.value.trim() : '';
+            
+            // Validate Firebase config if provided
+            if (fbConfig) {
+                try {
+                    JSON.parse(fbConfig);
+                } catch (e) {
+                    alert('Invalid Firebase Config JSON formatting. Please check your JSON syntax.');
+                    return;
+                }
+            }
+            
+            if (orKey) {
+                localStorage.setItem('openRouterKey', orKey);
+            } else {
+                localStorage.removeItem('openRouterKey');
+            }
+            
+            if (fbConfig) {
+                localStorage.setItem('firebaseConfig', fbConfig);
+            } else {
+                localStorage.removeItem('firebaseConfig');
+            }
+            
+            closeSettingsModal();
+            alert('Settings saved! Reloading application to apply configuration...');
+            window.location.reload();
+        });
+    }
+})();
+// --- END SETTINGS LOGIC ---
